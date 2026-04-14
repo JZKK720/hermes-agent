@@ -1,0 +1,43 @@
+# Hermes-Agent — Docker deployment secrets
+# Copy this file to data/.env and fill in any values you need.
+#
+#   cp docker/hermes-env.example data/.env
+#
+# The OPENAI_API_KEY and DATABASE_URL are already set in docker-compose.yml
+# via environment:. Override them here if you need per-user values.
+
+# =============================================================================
+# LLM — Ollama (no real key needed; any non-empty string works)
+# =============================================================================
+# Already set to "ollama" in docker-compose.yml — only override if needed.
+# OPENAI_API_KEY=ollama
+# OPENAI_BASE_URL=http://host.docker.internal:11434/v1
+
+# =============================================================================
+# OpenSpace agent access — secure the :8789 port (optional)
+# =============================================================================
+# When set, requests to /v1/* must include: Authorization: Bearer <key>
+# API_SERVER_KEY=your-secret-key-here
+
+# =============================================================================
+# PostgreSQL (available to memory plugins and skills)
+# =============================================================================
+# DSN is set in docker-compose.yml. Override per-deployment if needed.
+# DATABASE_URL=postgresql://hermes:changeme@hermes-postgres:5432/hermes
+
+# =============================================================================
+# Messaging gateways (enable the ones you want)
+# =============================================================================
+# TELEGRAM_BOT_TOKEN=
+# DISCORD_BOT_TOKEN=
+# SLACK_BOT_TOKEN=
+# SLACK_APP_TOKEN=
+
+# =============================================================================
+# Optional tool API keys
+# =============================================================================
+# EXA_API_KEY=          # AI-native web search (exa.ai)
+# PARALLEL_API_KEY=     # Web search + extract (parallel.ai)
+# FIRECRAWL_API_KEY=    # Web crawl (firecrawl.dev)
+# FAL_KEY=              # Image generation (fal.ai)
+# ELEVENLABS_API_KEY=   # Premium TTS (elevenlabs.io)

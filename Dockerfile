@@ -27,8 +27,13 @@ WORKDIR /opt/hermes
 # Install Node dependencies and Playwright as root (--with-deps needs apt)
 RUN npm install --prefer-offline --no-audit && \
     npx playwright install --with-deps chromium --only-shell && \
-    cd /opt/hermes/scripts/whatsapp-bridge && \
-    npm install --prefer-offline --no-audit && \
+    (cd /opt/hermes/scripts/whatsapp-bridge && npm install --no-audit || echo "whatsapp-bridge install skipped") && \
+    npm cache clean --force
+
+# Pre-build the web UI so hermes dashboard skips the slow build at startup
+RUN cd /opt/hermes/web && \
+    npm install --prefer-offline --no-audit --silent && \
+    npm run build && \
     npm cache clean --force
 
 # Hand ownership to hermes user, then install Python deps in a virtualenv
@@ -39,7 +44,8 @@ RUN uv venv && \
     uv pip install --no-cache-dir -e ".[all]"
 
 USER root
-RUN chmod +x /opt/hermes/docker/entrypoint.sh
+RUN sed -i 's/\r//' /opt/hermes/docker/entrypoint.sh && \
+    chmod +x /opt/hermes/docker/entrypoint.sh
 
 ENV HERMES_HOME=/opt/data
 VOLUME [ "/opt/data" ]

@@ -32,6 +32,18 @@ if [ "$(id -u)" = "0" ]; then
             echo "Warning: chown failed (rootless container?) — continuing anyway"
     fi
 
+    # Ensure the web UI source dir is owned by the (possibly remapped) hermes UID
+    # so that _build_web_ui can run npm install/build at startup.
+    if [ "$(stat -c %u "$INSTALL_DIR/web" 2>/dev/null)" != "$actual_hermes_uid" ]; then
+        chown -R hermes:hermes "$INSTALL_DIR/web"
+    fi
+
+    # Pre-create vite's output dir (../hermes_cli/web_dist) so hermes can write to it.
+    # Without this, vite fails with EACCES because hermes_cli/ is owned by the old UID.
+    # Use -R so pre-built files from the image layer are also chowned to the correct UID.
+    mkdir -p "$INSTALL_DIR/hermes_cli/web_dist"
+    chown -R hermes:hermes "$INSTALL_DIR/hermes_cli/web_dist"
+
     echo "Dropping root privileges"
     exec gosu hermes "$0" "$@"
 fi
@@ -41,10 +53,10 @@ source "${INSTALL_DIR}/.venv/bin/activate"
 
 # Create essential directory structure.  Cache and platform directories
 # (cache/images, cache/audio, platforms/whatsapp, etc.) are created on
-# demand by the application — don't pre-create them here so new installs
+# demand by the application 鈥?don't pre-create them here so new installs
 # get the consolidated layout from get_hermes_dir().
 # The "home/" subdirectory is a per-profile HOME for subprocesses (git,
-# ssh, gh, npm …).  Without it those tools write to /root which is
+# ssh, gh, npm 鈥?.  Without it those tools write to /root which is
 # ephemeral and shared across profiles.  See issue #4426.
 mkdir -p "$HERMES_HOME"/{cron,sessions,logs,hooks,memories,skills,skins,plans,workspace,home}
 
