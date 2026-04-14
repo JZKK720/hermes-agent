@@ -73,6 +73,15 @@ _PROVIDER_ALIASES = {
     "minimax_cn": "minimax-cn",
     "claude": "anthropic",
     "claude-code": "anthropic",
+    # Local-server aliases — same mapping as hermes_cli/auth.py
+    "ollama": "custom",
+    "lmstudio": "custom",
+    "lm-studio": "custom",
+    "lm_studio": "custom",
+    "vllm": "custom",
+    "llamacpp": "custom",
+    "llama-cpp": "custom",
+    "llama_cpp": "custom",
 }
 
 

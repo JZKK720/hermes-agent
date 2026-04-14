@@ -44,10 +44,14 @@ COPY --chown=hermes:hermes . .
 RUN cd web && npm run build
 
 # ---------- Python virtualenv ----------
-RUN chown hermes:hermes /opt/hermes
+RUN chown -R hermes:hermes /opt/hermes
 USER hermes
 RUN uv venv && \
     uv pip install --no-cache-dir -e ".[all]"
+
+USER root
+RUN sed -i 's/\r//' /opt/hermes/docker/entrypoint.sh && \
+    chmod +x /opt/hermes/docker/entrypoint.sh
 
 # ---------- Runtime ----------
 ENV HERMES_WEB_DIST=/opt/hermes/hermes_cli/web_dist
