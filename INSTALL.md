@@ -56,6 +56,21 @@ docker compose up -d --build
 
 The first build takes a few minutes (Node + Python dependencies + web UI compilation).
 
+### Optional: use the published upstream image with the same local env
+
+If you want to keep the local `data/.env`, `data/`, and config mounts but skip local image rebuilds, use the standalone pull-mode compose file:
+
+```bash
+docker compose -f docker-compose.upstream.yml pull
+docker compose -f docker-compose.upstream.yml up -d
+```
+
+By default it uses `nousresearch/hermes-agent:latest`. To pin a specific upstream tag instead:
+
+```bash
+HERMES_UPSTREAM_IMAGE=nousresearch/hermes-agent:v2026.4.23 docker compose -f docker-compose.upstream.yml up -d
+```
+
 ---
 
 ## Services
@@ -140,6 +155,14 @@ docker compose up -d --build
 git pull origin main
 docker compose up -d --build
 ```
+
+### Refresh containers from the published upstream image
+
+```bash
+docker compose -f docker-compose.upstream.yml up -d --pull always
+```
+
+This updates the Hermes containers from the published image while keeping your local `data/.env`, `data/config.yaml`, sessions, and other persisted runtime data.
 
 ---
 
