@@ -9,6 +9,14 @@ This release also folds in all the highlights deferred from v0.10.0 (which shipp
 
 ---
 
+## Fork Notes
+
+- This fork carries a local deployment overlay on top of upstream v0.11.0 for the `fork/main` branch only.
+- Fork-only additions include the Docker Compose stack in [docker-compose.yml](docker-compose.yml), the pull-mode upstream image path in [docker-compose.upstream.yml](docker-compose.upstream.yml), host-local Ollama wiring, and the review-first maintenance guides under `.github/`.
+- These notes document local fork customizations and are not part of the upstream NousResearch release payload.
+
+---
+
 ## ✨ Highlights
 
 - **New Ink-based TUI** — `hermes --tui` is now a full React/Ink rewrite of the interactive CLI, with a Python JSON-RPC backend (`tui_gateway`). Sticky composer, live streaming with OSC-52 clipboard support, stable picker keys, status bar with per-turn stopwatch and git branch, `/clear` confirm, light-theme preset, and a subagent spawn observability overlay. ~310 commits to `ui-tui/` + `tui_gateway/`. (@OutThisLife + Teknium)
