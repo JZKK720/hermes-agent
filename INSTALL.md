@@ -26,7 +26,7 @@ To use a different model, follow the [Change the model](#change-the-model) secti
 curl -fsSL https://raw.githubusercontent.com/JZKK720/hermes-agent/main/docker/deploy.sh | bash
 ```
 
-The script clones the repo, seeds `data/.env`, builds the image, and starts all services.
+The script clones the repo, seeds `data/.env`, pulls `nousresearch/hermes-agent:latest`, and starts all services with the upstream-image compose file.
 
 ---
 
@@ -51,21 +51,21 @@ Edit `data/.env` if needed (see [Configuration](#configuration) below). For a pl
 ### 3. Start all services
 
 ```bash
-docker compose up -d --build
-```
-
-The first build takes a few minutes (Node + Python dependencies + web UI compilation).
-
-### Optional: use the published upstream image with the same local env
-
-If you want to keep the local `data/.env`, `data/`, and config mounts but skip local image rebuilds, use the standalone pull-mode compose file:
-
-```bash
 docker compose -f docker-compose.upstream.yml pull
 docker compose -f docker-compose.upstream.yml up -d
 ```
 
-By default it uses `nousresearch/hermes-agent:latest`. To pin a specific upstream tag instead:
+This keeps the local `data/.env`, `data/config.yaml`, and persisted runtime data while pulling the published upstream image.
+
+### Optional: build the local image instead
+
+If you are testing local code or need to rebuild the image from this checkout, use the local-build compose path instead:
+
+```bash
+docker compose up -d --build
+```
+
+By default the pull-mode compose file uses `nousresearch/hermes-agent:latest`. To pin a specific upstream tag instead:
 
 ```bash
 HERMES_UPSTREAM_IMAGE=nousresearch/hermes-agent:v2026.4.23 docker compose -f docker-compose.upstream.yml up -d
@@ -91,12 +91,13 @@ docker exec -it hermes-web hermes
 ### Useful commands
 
 ```bash
-docker compose logs -f             # stream logs from all services
-docker compose logs -f hermes-web  # web UI logs only
-docker compose down                # stop all services
-docker compose down -v             # stop + delete volumes (resets data!)
-docker compose up -d               # start (after first build)
-docker compose up -d --build       # rebuild + start (after code changes)
+docker compose -f docker-compose.upstream.yml logs -f             # stream logs from all services
+docker compose -f docker-compose.upstream.yml logs -f hermes-web  # web UI logs only
+docker compose -f docker-compose.upstream.yml down                # stop all services
+docker compose -f docker-compose.upstream.yml down -v             # stop + delete volumes (resets data!)
+docker compose -f docker-compose.upstream.yml up -d               # start from the published upstream image
+docker compose -f docker-compose.upstream.yml up -d --pull always # refresh to the latest upstream image
+docker compose up -d --build                                      # rebuild + start (for local code changes)
 ```
 
 ---
@@ -131,7 +132,7 @@ model:
 Then restart the containers:
 
 ```bash
-docker compose restart hermes-web hermes-gateway
+docker compose -f docker-compose.upstream.yml restart hermes-web hermes-gateway
 ```
 
 ---
@@ -146,14 +147,14 @@ git stash push -u -m "local-changes"
 git merge upstream/main --no-edit
 git stash pop
 git push origin main
-docker compose up -d --build
+docker compose -f docker-compose.upstream.yml up -d --pull always
 ```
 
 ### Pull your own fork changes (on a second machine)
 
 ```bash
 git pull origin main
-docker compose up -d --build
+docker compose -f docker-compose.upstream.yml up -d --pull always
 ```
 
 ### Refresh containers from the published upstream image
@@ -171,8 +172,8 @@ This updates the Hermes containers from the published image while keeping your l
 ### Web UI not reachable
 
 ```bash
-docker compose ps              # check service state
-docker compose logs hermes-web # read startup output
+docker compose -f docker-compose.upstream.yml ps              # check service state
+docker compose -f docker-compose.upstream.yml logs hermes-web # read startup output
 ```
 
 ### Model calls fail / "unknown provider"
@@ -191,16 +192,16 @@ Check `data/config.yaml` has `provider: "custom"` (not `"ollama"`).
 The `entrypoint.sh` runs `chown -R` on startup. If it still fails:
 
 ```bash
-docker compose down
-docker compose up -d --build
+docker compose -f docker-compose.upstream.yml down
+docker compose -f docker-compose.upstream.yml up -d --pull always
 ```
 
 ### Reset everything (start fresh)
 
 ```bash
-docker compose down -v   # removes named volumes
+docker compose -f docker-compose.upstream.yml down -v   # removes named volumes
 rm -rf data/             # removes persisted data (config, sessions, memories)
-docker compose up -d --build
+docker compose -f docker-compose.upstream.yml up -d
 ```
 
 ---

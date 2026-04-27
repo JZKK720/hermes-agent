@@ -15,7 +15,7 @@
 # What this script does:
 #   1. Clones JZKK720/hermes-agent (skipped if already cloned)
 #   2. Creates the data/ directory and seeds data/.env from template
-#   3. Runs: docker compose up -d --build
+#   3. Pulls nousresearch/hermes-agent:latest and runs: docker compose -f docker-compose.upstream.yml up -d
 # ============================================================================
 
 set -euo pipefail
@@ -70,9 +70,10 @@ else
     log "data/.env already exists — skipping template copy."
 fi
 
-# ── Build + start ─────────────────────────────────────────────────────────────
-log "Building image and starting services (this may take a few minutes)..."
-docker compose up -d --build
+# ── Pull + start ──────────────────────────────────────────────────────────────
+log "Pulling the published upstream Hermes image and starting services..."
+docker compose -f docker-compose.upstream.yml pull
+docker compose -f docker-compose.upstream.yml up -d
 
 echo ""
 ok "Hermes-Agent is up!"
@@ -83,8 +84,9 @@ echo -e "  ${CYAN}Webhook${NC}             : :8644"
 echo -e "  ${CYAN}PostgreSQL${NC}          : localhost:5433"
 echo ""
 echo -e "  ${CYAN}Interactive CLI${NC}     : docker exec -it hermes-web hermes"
-echo -e "  ${CYAN}View logs${NC}           : docker compose logs -f"
-echo -e "  ${CYAN}Stop all${NC}            : docker compose down"
+echo -e "  ${CYAN}View logs${NC}           : docker compose -f docker-compose.upstream.yml logs -f"
+echo -e "  ${CYAN}Stop all${NC}            : docker compose -f docker-compose.upstream.yml down"
 echo ""
 warn "Config lives in data/config.yaml — edit the model name or settings there."
 warn "Default model: gemma4:e4b-it-q8_0 — change it in data/config.yaml"
+warn "For local code changes, switch back to: docker compose up -d --build"
