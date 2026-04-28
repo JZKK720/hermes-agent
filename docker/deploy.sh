@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 # docker/deploy.sh — One-liner installer for the JZKK720/hermes-agent fork
 #
 # Usage (fresh machine):

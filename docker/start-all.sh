@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 # docker/start-all.sh — Self-contained single-container entrypoint (optional).
 #
 # RECOMMENDED: Use the two-service docker-compose.yml instead (hermes-web +
