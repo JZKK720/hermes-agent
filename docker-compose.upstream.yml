@@ -16,7 +16,9 @@ x-hermes-common: &hermes-common
   volumes:
     - ./data:/opt/data
     - ./docker/hermes-config.yaml:/opt/hermes/cli-config.yaml.example:ro
-    - ./docker/entrypoint.sh:/opt/hermes/docker/entrypoint.sh:ro
+    # entrypoint.sh is NOT mounted here — the upstream image bakes in its own
+    # working entrypoint. Mounting a Windows-checked-out copy causes CRLF
+    # failures (tini: No such file or directory).
   environment:
     - HERMES_UID=1000
     - HERMES_GID=1000

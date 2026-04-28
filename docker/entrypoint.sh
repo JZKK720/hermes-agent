@@ -1,4 +1,4 @@
-#!/bin/bash
+﻿#!/bin/bash
 # Docker/Podman entrypoint: bootstrap config files into the mounted volume, then run hermes.
 set -e
 
