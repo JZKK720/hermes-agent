@@ -26,7 +26,7 @@ To use a different model, follow the [Change the model](#change-the-model) secti
 curl -fsSL https://raw.githubusercontent.com/JZKK720/hermes-agent/main/docker/deploy.sh | bash
 ```
 
-The script clones the repo, seeds `data/.env`, builds the image, and starts all services.
+The script clones the repo, seeds `data/.env`, pulls `nousresearch/hermes-agent:latest`, and starts all services.
 
 ---
 
@@ -51,10 +51,11 @@ Edit `data/.env` if needed (see [Configuration](#configuration) below). For a pl
 ### 3. Start all services
 
 ```bash
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
-The first build takes a few minutes (Node + Python dependencies + web UI compilation).
+This stack now runs the upstream `nousresearch/hermes-agent:latest` image while keeping the fork-local `docker/hermes-config.yaml` and `docker/entrypoint.sh` overlays mounted.
 
 ---
 
@@ -80,8 +81,8 @@ docker compose logs -f             # stream logs from all services
 docker compose logs -f hermes-web  # web UI logs only
 docker compose down                # stop all services
 docker compose down -v             # stop + delete volumes (resets data!)
-docker compose up -d               # start (after first build)
-docker compose up -d --build       # rebuild + start (after code changes)
+docker compose pull                # fetch the latest upstream Hermes image
+docker compose up -d               # start or refresh containers with the pulled image
 ```
 
 ---
@@ -131,14 +132,16 @@ git stash push -u -m "local-changes"
 git merge upstream/main --no-edit
 git stash pop
 git push origin main
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
 ### Pull your own fork changes (on a second machine)
 
 ```bash
 git pull origin main
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
 ---
@@ -169,7 +172,8 @@ The `entrypoint.sh` runs `chown -R` on startup. If it still fails:
 
 ```bash
 docker compose down
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
 ### Reset everything (start fresh)
@@ -177,7 +181,8 @@ docker compose up -d --build
 ```bash
 docker compose down -v   # removes named volumes
 rm -rf data/             # removes persisted data (config, sessions, memories)
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
 ---

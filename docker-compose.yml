@@ -4,7 +4,8 @@
 #   mkdir -p data
 #   cp docker/hermes-env.example data/.env
 #   # Edit data/.env if needed, then:
-#   docker compose up -d --build
+#   docker compose pull
+#   docker compose up -d
 #
 # Services:
 #   hermes-web     — Hermes web UI on :9119
@@ -25,15 +26,15 @@
 #   5433 → 5432   PostgreSQL (host:5433 → container:5432)
 
 x-hermes-common: &hermes-common
-  build: .
-  image: hermes-agent:local
+  image: nousresearch/hermes-agent:latest
+  pull_policy: always
   restart: unless-stopped
   volumes:
     # Runtime data (sessions, memories, skills, config) — persisted on host
     - ./data:/opt/data
     # Deployment config template — auto-copied to data/config.yaml on first start
     - ./docker/hermes-config.yaml:/opt/hermes/cli-config.yaml.example:ro
-    # Mount updated entrypoint so fixes apply without a full image rebuild
+    # Keep the fork-local bootstrap config and entrypoint layered over the upstream image
     - ./docker/entrypoint.sh:/opt/hermes/docker/entrypoint.sh:ro
   environment:
     # UID remapping — must match your host user to avoid permission issues
@@ -58,8 +59,14 @@ services:
   hermes-web:
     <<: *hermes-common
     container_name: hermes-web
-    # entrypoint.sh receives "dashboard" → runs: hermes dashboard --host 0.0.0.0 --port 9119 --no-open
-    command: ["dashboard", "--host", "0.0.0.0", "--port", "9119", "--no-open"]
+    # entrypoint.sh receives "dashboard" → runs: hermes dashboard --host 0.0.0.0 --port 9119 --no-open --insecure
+    # --insecure is required here because the upstream dashboard now guards 0.0.0.0 binds by default
+    command: ["dashboard", "--host", "0.0.0.0", "--port", "9119", "--no-open", "--insecure"]
+    environment:
+      - HERMES_UID=1000
+      - OPENAI_API_KEY=ollama
+      - DATABASE_URL=postgresql://hermes:${POSTGRES_PASSWORD:-changeme}@postgres:5432/hermes
+      - GATEWAY_HEALTH_URL=http://hermes-gateway:8789
     ports:
       - "9119:9119"
     healthcheck:

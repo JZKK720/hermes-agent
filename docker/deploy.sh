@@ -15,7 +15,7 @@
 # What this script does:
 #   1. Clones JZKK720/hermes-agent (skipped if already cloned)
 #   2. Creates the data/ directory and seeds data/.env from template
-#   3. Runs: docker compose up -d --build
+#   3. Pulls nousresearch/hermes-agent:latest and starts the stack
 # ============================================================================
 
 set -euo pipefail
@@ -70,9 +70,10 @@ else
     log "data/.env already exists — skipping template copy."
 fi
 
-# ── Build + start ─────────────────────────────────────────────────────────────
-log "Building image and starting services (this may take a few minutes)..."
-docker compose up -d --build
+# ── Pull + start ──────────────────────────────────────────────────────────────
+log "Pulling the upstream Hermes image and starting services..."
+docker compose pull
+docker compose up -d
 
 echo ""
 ok "Hermes-Agent is up!"
