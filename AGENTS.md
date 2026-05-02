@@ -549,40 +549,47 @@ truth remains `NousResearch/hermes-agent:main`.
 Treat these as three different maintenance tracks:
 
 1. **Runtime freshness only** — when the user wants the local containers updated
-   but does NOT need the local repo or fork branch synced, refresh the published
-   upstream image with:
+   but does NOT need the local repo or fork branch synced, refresh the fork's
+   deployment wrapper against the published upstream image with:
    ```bash
-   docker compose -f docker-compose.upstream.yml up -d --pull always
+   docker compose pull
+   docker compose up -d
    ```
    This keeps the local `data/.env`, `data/config.yaml`, persisted data, and
    host ports while updating the Hermes containers.
 
-2. **Local source freshness from upstream** — when the user wants the local
-  checkout and locally built containers to reflect the latest upstream source,
-  compare local `HEAD`, `origin/main`, and live `upstream/main` first. After
-  approval, update the local checkout from `upstream/main` and rebuild with the
-  local compose path:
-  ```bash
-  docker compose up -d --build
-  ```
-  This gets the machine onto the latest upstream source even if `origin/main`
-  has not been synced yet.
+2. **Fork source freshness from upstream** — when the user wants `origin/main`
+  to stay current with `upstream/main`, compare local `HEAD`, `origin/main`,
+  and live `upstream/main` first. After approval, merge or rebase the fork from
+  `upstream/main`, preserve the fork-owned deployment surfaces explicitly, push
+  the result to `origin/main`, and then refresh the runtime with the same
+  pull-only wrapper path.
 
-3. **Repo and fork freshness** — when the user also wants other machines to get
-  the newer source via `git pull origin main`, merge or rebase the fork from
-  `upstream/main`, preserve the fork-owned surfaces explicitly, push the result
-  to `origin/main`, and then refresh the local runtime.
+3. **Second-machine rollout** — when the user wants another machine to pick up
+  the updated fork wrapper, first sync `origin/main` locally, then on the other
+  machine run:
+  ```bash
+  git pull origin main
+  docker compose pull
+  docker compose up -d
+  ```
+  This keeps local env/config state on that machine while refreshing the
+  published upstream image through the fork's deployment files.
 
 Important consequences:
 
 - `git pull origin main` only gets whatever is already on the fork. It does NOT
   make the machine current with `NousResearch/hermes-agent:main` unless the fork
   has already been synced from upstream.
-- If the user wants the local checkout to follow `NousResearch/hermes-agent:main`
-  immediately, update from `upstream/main` first and rebuild locally; do not wait
-  for the fork to catch up unless they also want `origin/main` updated.
-- `docker compose -f docker-compose.upstream.yml up -d --pull always` updates the
-  running runtime, but it does NOT update the local repo checkout or `origin/main`.
+- `git pull origin main` updates the fork's deployment wrapper files, but the
+  runtime still follows the published upstream image configured in compose.
+- Syncing the local checkout with `upstream/main` does NOT update running
+  containers until `docker compose pull` and `docker compose up -d` are run.
+- The fork should not treat `docker compose up -d --build` or fork-owned image
+  tags as the normal update path.
+- If local mounts of `docker/entrypoint.sh` or `docker/hermes-config.yaml`
+  remain, upstream image updates can still be partially pinned by fork-local
+  files.
 - If the user says "update the local container" or "pull latest," clarify whether
   they mean runtime only, local source sync from upstream, fork sync, or both.
 - Unless the user explicitly asks otherwise, leave `upstream` read-only and do not

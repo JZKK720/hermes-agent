@@ -1,13 +1,13 @@
 ---
 name: docker-compose-smoke-test
-description: "Bring up Hermes locally with Docker Compose, seed data/.env from docker/hermes-env.example, inspect logs, and smoke test hermes-web, hermes-gateway, and postgres using either the local build stack or the pulled upstream-image stack. Use when asked to install without building locally, validate docker compose, debug container startup, or check local stack health."
+description: "Bring up Hermes locally with Docker Compose, seed data/.env from docker/hermes-env.example, inspect logs, and smoke test the fork's deployment wrapper around the published upstream image. Use when asked to install without local builds, validate docker compose, debug container startup, or check local stack health."
 argument-hint: "[service or issue to verify]"
 user-invocable: true
 ---
 
 # Docker Compose Smoke Test
 
-Use this skill for local stack validation after code changes, install changes, or fork sync work.
+Use this skill for local stack validation after install changes, deployment-wrapper changes, or fork sync work.
 
 ## Read First
 
@@ -20,12 +20,11 @@ Use this skill for local stack validation after code changes, install changes, o
 
 ## When to Use
 
-- Build the local stack after code or dependency changes.
 - Install or refresh Hermes from `nousresearch/hermes-agent:latest` without rebuilding locally.
 - Confirm that `hermes-web`, `hermes-gateway`, and `postgres` start correctly.
 - Debug a failed local bring-up.
 - Verify that the stack is usable before pushing a fork update.
-- Keep the existing local env file, config mounts, and host ports while switching between local-build and pulled-image validation.
+- Keep the existing local env file, config mounts, and host ports while refreshing the published upstream image through the fork wrapper.
 
 ## Procedure
 
@@ -49,22 +48,23 @@ If `data/.env` already exists, inspect it before replacing it.
 
 ### 3. Choose the compose path before starting containers
 
-Default to the pull-only stack when local image contents are not the thing being tested:
+Default to the documented fork deployment wrapper:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+Use this path for install validation, upstream-sync review, or runtime checks against the published container image while keeping the fork's wrapper behavior intact. It keeps the same `./data` mount, `data/.env`, generated `data/config.yaml`, host ports, and fork-local config/entrypoint surfaces while pulling `nousresearch/hermes-agent:latest`.
+
+If the user explicitly wants to compare against the raw published upstream image without the fork-local entrypoint overlay, use [docker-compose.upstream.yml](../../../docker-compose.upstream.yml):
 
 ```bash
 docker compose -f docker-compose.upstream.yml pull
 docker compose -f docker-compose.upstream.yml up -d
 ```
 
-Use this path for install validation, upstream-sync review, or runtime checks against the published container image. It keeps the same `./data` mount, `data/.env`, generated `data/config.yaml`, and host ports while pulling `nousresearch/hermes-agent:latest` or a pinned `HERMES_UPSTREAM_IMAGE`.
-
-Use the local-build stack only when fork code, the Dockerfile, or other in-repo image contents are under test:
-
-```bash
-docker compose up -d --build
-```
-
-### 4. Build and start the stack
+### 4. Pull and start the stack
 
 Use the command that matches the chosen compose path.
 
@@ -125,8 +125,9 @@ Do not use the destructive reset unless the user clearly wants volumes and persi
 
 - Prefer repo-documented commands from [INSTALL.md](../../../INSTALL.md) over improvised alternatives.
 - Do not overwrite an existing `data/.env` without checking whether it contains local secrets.
-- Default to [docker-compose.upstream.yml](../../../docker-compose.upstream.yml) for no-build install or runtime validation, and only switch to [docker-compose.yml](../../../docker-compose.yml) when the local image build is the subject of the test.
-- Keep the same local env mounts and ports when moving between pull-only and local-build validation; do not introduce alternate host ports unless the user explicitly asks for them.
+- Default to [docker-compose.yml](../../../docker-compose.yml) for routine no-build install or runtime validation of this fork's wrapper path.
+- Use [docker-compose.upstream.yml](../../../docker-compose.upstream.yml) only when the user explicitly wants to compare wrapper behavior to the raw published upstream image.
+- Keep the same local env mounts and ports when moving between wrapper validation and raw-upstream comparison; do not introduce alternate host ports unless the user explicitly asks for them.
 - If the stack fails because Ollama or another external dependency is unavailable, report that as an environment blocker rather than guessing at code changes.
 - When the stack comes up on a fork, remember that upstream Docker publish CI does not validate the fork automatically.
 

@@ -80,7 +80,6 @@ docker exec -it hermes-web hermes
 docker compose logs -f             # stream logs from all services
 docker compose logs -f hermes-web  # web UI logs only
 docker compose down                # stop all services
-docker compose down -v             # stop + delete volumes (resets data!)
 docker compose pull                # fetch the latest upstream Hermes image
 docker compose up -d               # start or refresh containers with the pulled image
 ```
@@ -140,9 +139,6 @@ docker compose up -d
 
 ```bash
 git pull origin main
-docker compose pull
-docker compose up -d
-```
 docker compose pull
 docker compose up -d
 ```

@@ -1,13 +1,13 @@
 ---
 name: fork-sync-review
-description: "Review fork divergence, sync origin/main with upstream/main, evaluate moving docker-compose from local image builds to upstream nousresearch/hermes-agent images, preserve data/.env and Postgres state, and produce a smoke-test plan for deployment updates."
+description: "Review fork divergence, sync origin/main with upstream/main, keep this fork aligned as a deployment wrapper around the published upstream nousresearch/hermes-agent image, preserve data/.env and Postgres state, and produce a smoke-test plan for deployment updates."
 argument-hint: "Describe the fork sync, merge, or image migration question"
 user-invocable: true
 ---
 
 # Fork Sync Review
 
-Use this skill when the task is to inspect how far this fork has drifted from upstream, decide whether deployment changes should stay fork-local, or plan a switch from local Docker builds to upstream images without losing runtime state.
+Use this skill when the task is to inspect how far this fork has drifted from upstream, decide whether deployment changes should stay fork-local, or keep the fork aligned as a deployment wrapper around the published upstream image without losing runtime state.
 
 ## Procedure
 

@@ -1,13 +1,13 @@
 ---
 name: fork-maintenance
-description: "Review the current codebase state, compare local or fork main with live upstream, review current local PR or fork-only deltas before sync, verify whether the repo is behind the requested release line such as 0.11.x, preserve intentional fork changes, and wait for approval before any fetch, rebuild, or upgrade work."
+description: "Review the current codebase state, compare local or fork main with live upstream, review current local PR or fork-only deltas before sync, verify whether the repo is behind the requested release line such as 0.11.x, preserve intentional fork changes, and wait for approval before any fetch, merge, or runtime refresh work."
 argument-hint: "[target version, release line, or maintenance task]"
 user-invocable: true
 ---
 
 # Fork Maintenance
 
-Use this skill for repository maintenance tasks that combine git comparison, version alignment, release prep, and local Docker Compose validation.
+Use this skill for repository maintenance tasks that combine git comparison, version alignment, release prep, and deployment-wrapper validation against the published upstream image.
 
 ## Read First
 
@@ -16,7 +16,7 @@ Start from the repo's existing sources of truth instead of re-deriving the workf
 - [AGENTS.md](../../../AGENTS.md) for the repo-wide guardrails and test wrapper requirement.
 - [INSTALL.md](../../../INSTALL.md) for fork sync and Docker Compose commands.
 - [docker-compose.yml](../../../docker-compose.yml) for service names, ports, and env handling.
-- [docker-compose.upstream.yml](../../../docker-compose.upstream.yml) for pull-only validation against `nousresearch/hermes-agent:latest` while keeping local mounts and host ports.
+- [docker-compose.upstream.yml](../../../docker-compose.upstream.yml) for comparing the fork wrapper against the raw published upstream image when needed.
 - [docker/deploy.sh](../../../docker/deploy.sh) for fork-specific deployment behavior.
 - [docker/hermes-env.example](../../../docker/hermes-env.example) for the local env template.
 - [.github/PULL_REQUEST_TEMPLATE.md](../../../.github/PULL_REQUEST_TEMPLATE.md) for the repo's PR checklist expectations.
@@ -28,14 +28,14 @@ Start from the repo's existing sources of truth instead of re-deriving the workf
 
 ## When to Use
 
-- Review the entire codebase state before deciding whether a rebuild or upgrade is needed.
+- Review the entire codebase state before deciding whether a fork sync or runtime refresh is needed.
 - Review the currently active local PR work, checked-out review branch, or fork-only delta before proposing an upstream sync.
 - Review a build or release before merging.
 - Compare `origin/main` with `upstream/main`.
 - Determine whether the local repo or fork is behind a release line such as `0.11.x`.
 - Explain why the fork exists and what fork-specific implementation it still carries.
 - Protect intentional fork-owned files such as install docs, compose files, deploy scripts, prompts, and skills from being blindly overwritten by upstream.
-- Validate the local Docker Compose stack with a local env file.
+- Validate the fork's Docker Compose wrapper stack with a local env file.
 - Check whether a fork push will get the same CI coverage as upstream.
 
 ## Procedure
@@ -61,7 +61,7 @@ Summarize:
 
 Do not rely only on cached local tracking refs when answering upstream status. If GitHub smart-HTTP is flaky on this machine, fall back to live GitHub web or API checks before declaring the fork current.
 
-If the repo has local changes, do not assume stashing, resetting, merging, or rebuilding is safe. Ask before any state-changing operation.
+If the repo has local changes, do not assume stashing, resetting, merging, or refreshing containers is safe. Ask before any state-changing operation.
 
 ### 2. Review local PR work and fork-only deltas before proposing sync
 
@@ -100,9 +100,9 @@ Ground the explanation in the files that actually carry the fork delta:
 
 Summarize the practical reason the fork exists, which files implement that difference, and whether the delta is narrow or broad relative to upstream.
 
-### 5. Stop for approval before any sync, rebuild, or upgrade
+### 5. Stop for approval before any sync or runtime refresh
 
-For review-first requests, stop after the analysis and proposed next steps. Do not run `git fetch`, `git stash`, `git merge`, `git pull`, `git push`, `docker compose up -d --build`, `docker compose -f docker-compose.upstream.yml up -d`, installer scripts, or version-bump commands until the user approves a plan.
+For review-first requests, stop after the analysis and proposed next steps. Do not run `git fetch`, `git stash`, `git merge`, `git pull`, `git push`, `docker compose pull`, `docker compose up -d`, `docker compose -f docker-compose.upstream.yml up -d`, installer scripts, or version-bump commands until the user approves a plan.
 
 ### 6. Follow the documented fork sync path after approval
 
@@ -114,7 +114,8 @@ git stash push -u -m "local-changes"
 git merge upstream/main --no-edit
 git stash pop
 git push origin main
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
 Adjust this flow to the actual repo state:
@@ -124,34 +125,40 @@ Adjust this flow to the actual repo state:
 - explain conflicts and blockers before continuing;
 - if local PR work must be preserved, spell out whether that work should be rebased, re-reviewed, or merged after the upstream sync instead of assuming a direct fast-forward into `fork/main`.
 
-### 7. Prefer pulled upstream-image validation when local image changes are not under test
+### 7. Use the fork deployment wrapper for routine runtime validation
 
-When the goal is install/runtime validation, fork-sync confidence, or parity with the published upstream container, default to [docker-compose.upstream.yml](../../../docker-compose.upstream.yml):
+When the goal is install/runtime validation, fork-sync confidence, or routine wrapper updates, default to the documented fork deployment wrapper:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+This keeps the local `data/.env`, `data/config.yaml`, persisted data, and host ports (`9119`, `8789`, `8644`, `5433`) while upgrading the Hermes containers through the fork-owned wrapper around `nousresearch/hermes-agent:latest`.
+
+If the user explicitly wants to compare the wrapper against the raw published upstream image without the fork-local entrypoint overlay, use [docker-compose.upstream.yml](../../../docker-compose.upstream.yml):
 
 ```bash
 docker compose -f docker-compose.upstream.yml pull
 docker compose -f docker-compose.upstream.yml up -d
 ```
 
-This keeps the local `data/.env`, `data/config.yaml`, persisted data, and host ports (`9119`, `8789`, `8644`, `5433`) while upgrading the Hermes containers to `nousresearch/hermes-agent:latest` or a pinned `HERMES_UPSTREAM_IMAGE`.
-
-Reserve [docker-compose.yml](../../../docker-compose.yml) with `docker compose up -d --build` for cases where local code, the Dockerfile, or the fork's image contents are the thing being tested.
-
-### 8. Use the local Docker Compose workflow that the repo already documents after approval
+### 8. Use the documented deployment-wrapper workflow after approval
 
 For local stack bring-up, use the repo's `data/.env` convention:
 
 ```bash
 mkdir -p data
 cp docker/hermes-env.example data/.env
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
 Important checks:
 
 - `data/.env` is local runtime state and should not be committed.
 - `data/config.yaml` is bootstrapped on first start from `docker/hermes-config.yaml`.
-- `docker compose up -d --build` is the expected rebuild path after code changes.
+- `docker compose pull` plus `docker compose up -d` is the expected update path for this fork's deployment wrapper.
 - `docker exec -it hermes-web hermes` is the documented interactive smoke test.
 
 Useful follow-up commands:
@@ -204,5 +211,5 @@ For maintenance requests in this area, structure the response in this order:
 2. local PR or fork-delta review, including what must remain on `fork/main`;
 3. release-line status, including commit lag versus version-file lag;
 4. fork-specific implementation and whether it still justifies the fork;
-5. approval-gated next steps, with rebuild or upgrade commands separated from the read-only findings;
+5. approval-gated next steps, with sync or runtime-refresh commands separated from the read-only findings;
 6. blockers, risks, and the explicit statement that execution is paused pending user approval.

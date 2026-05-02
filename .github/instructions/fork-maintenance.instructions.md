@@ -1,5 +1,5 @@
 ---
-description: "Use when syncing this fork with upstream main, comparing fork divergence, migrating docker-compose from local image builds to upstream nousresearch/hermes-agent images, preserving data/.env credentials and Postgres state, or smoke-testing container updates."
+description: "Use when syncing this fork with upstream main, comparing fork divergence, keeping the deployment wrapper aligned with the published upstream nousresearch/hermes-agent image, preserving data/.env credentials and Postgres state, or smoke-testing container updates."
 name: "Fork Maintenance"
 applyTo:
   - "docker-compose.yml"
@@ -26,10 +26,10 @@ applyTo:
 
 ## Evaluating Upstream Images
 
-- [docker-compose.yml](../../docker-compose.yml) now targets `nousresearch/hermes-agent:latest` from Docker Hub rather than a local `hermes-agent:local` build.
+- [docker-compose.yml](../../docker-compose.yml) keeps this fork as a deployment wrapper around the published upstream `nousresearch/hermes-agent:latest` image rather than a local `hermes-agent:local` build.
 - The upstream repo publishes `nousresearch/hermes-agent` from [docker publish workflow](../workflows/docker-publish.yml). Do not assume a GHCR image exists for Hermes unless the target registry is explicitly documented or verified.
-- If moving to an upstream image, prefer `docker compose pull` plus `docker compose up -d` for future updates.
-- Re-check whether local mounts of [docker/entrypoint.sh](../../docker/entrypoint.sh) or [docker/hermes-config.yaml](../../docker/hermes-config.yaml) are still necessary after the migration; they may preserve local fixes but also block future upstream behavior changes.
+- For routine updates in this fork, prefer `docker compose pull` plus `docker compose up -d`; do not switch to `--build` or fork-owned image tags unless the user is explicitly testing image contents.
+- Re-check whether local mounts of [docker/entrypoint.sh](../../docker/entrypoint.sh) or [docker/hermes-config.yaml](../../docker/hermes-config.yaml) are still necessary; they preserve the fork wrapper but can also block future upstream behavior changes.
 
 ## Merge and Divergence Checks
 

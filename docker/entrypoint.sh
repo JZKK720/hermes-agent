@@ -46,7 +46,6 @@ if [ "$(id -u)" = "0" ]; then
     if [ "$(stat -c %u "$INSTALL_DIR/web" 2>/dev/null)" != "$actual_hermes_uid" ]; then
         chown -R hermes:hermes "$INSTALL_DIR/web"
     fi
-    fi
 
     # Pre-create vite's output dir (../hermes_cli/web_dist) so hermes can write to it.
     # Without this, vite fails with EACCES because hermes_cli/ is owned by the old UID.
