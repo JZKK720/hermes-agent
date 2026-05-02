@@ -247,19 +247,6 @@ npm run fmt       # prettier
 npm test          # vitest
 ```
 
-### TUI in the Dashboard (`hermes dashboard` → `/chat`)
-
-The dashboard embeds the real `hermes --tui` — **not** a rewrite.  See `hermes_cli/pty_bridge.py` + the `@app.websocket("/api/pty")` endpoint in `hermes_cli/web_server.py`.
-
-- Browser loads `web/src/pages/ChatPage.tsx`, which mounts xterm.js's `Terminal` with the WebGL renderer, `@xterm/addon-fit` for container-driven resize, and `@xterm/addon-unicode11` for modern wide-character widths.
-- `/api/pty?token=…` upgrades to a WebSocket; auth uses the same ephemeral `_SESSION_TOKEN` as REST, via query param (browsers can't set `Authorization` on WS upgrade).
-- The server spawns whatever `hermes --tui` would spawn, through `ptyprocess` (POSIX PTY — WSL works, native Windows does not).
-- Frames: raw PTY bytes each direction; resize via `\x1b[RESIZE:<cols>;<rows>]` intercepted on the server and applied with `TIOCSWINSZ`.
-
-**Do not re-implement the primary chat experience in React.** The main transcript, composer/input flow (including slash-command behavior), and PTY-backed terminal belong to the embedded `hermes --tui` — anything new you add to Ink shows up in the dashboard automatically. If you find yourself rebuilding the transcript or composer for the dashboard, stop and extend Ink instead.
-
-**Structured React UI around the TUI is allowed when it is not a second chat surface.** Sidebar widgets, inspectors, summaries, status panels, and similar supporting views (e.g. `ChatSidebar`, `ModelPickerDialog`, `ToolCall`) are fine when they complement the embedded TUI rather than replacing the transcript / composer / terminal. Keep their state independent of the PTY child's session and surface their failures non-destructively so the terminal pane keeps working unimpaired.
-
 ---
 
 ## Adding New Tools
@@ -553,6 +540,54 @@ in config.yaml (or `HERMES_BACKGROUND_NOTIFICATIONS` env var):
 - `error` — only the final message when exit code != 0
 - `off` — no watcher messages at all
 
+### Fork Maintenance: Separate Repo Sync From Runtime Refresh
+
+This checkout is maintained as a fork that can carry fork-owned install docs,
+compose files, deploy scripts, prompts, and skills, while the upstream source of
+truth remains `NousResearch/hermes-agent:main`.
+
+Treat these as three different maintenance tracks:
+
+1. **Runtime freshness only** — when the user wants the local containers updated
+   but does NOT need the local repo or fork branch synced, refresh the published
+   upstream image with:
+   ```bash
+   docker compose -f docker-compose.upstream.yml up -d --pull always
+   ```
+   This keeps the local `data/.env`, `data/config.yaml`, persisted data, and
+   host ports while updating the Hermes containers.
+
+2. **Local source freshness from upstream** — when the user wants the local
+  checkout and locally built containers to reflect the latest upstream source,
+  compare local `HEAD`, `origin/main`, and live `upstream/main` first. After
+  approval, update the local checkout from `upstream/main` and rebuild with the
+  local compose path:
+  ```bash
+  docker compose up -d --build
+  ```
+  This gets the machine onto the latest upstream source even if `origin/main`
+  has not been synced yet.
+
+3. **Repo and fork freshness** — when the user also wants other machines to get
+  the newer source via `git pull origin main`, merge or rebase the fork from
+  `upstream/main`, preserve the fork-owned surfaces explicitly, push the result
+  to `origin/main`, and then refresh the local runtime.
+
+Important consequences:
+
+- `git pull origin main` only gets whatever is already on the fork. It does NOT
+  make the machine current with `NousResearch/hermes-agent:main` unless the fork
+  has already been synced from upstream.
+- If the user wants the local checkout to follow `NousResearch/hermes-agent:main`
+  immediately, update from `upstream/main` first and rebuild locally; do not wait
+  for the fork to catch up unless they also want `origin/main` updated.
+- `docker compose -f docker-compose.upstream.yml up -d --pull always` updates the
+  running runtime, but it does NOT update the local repo checkout or `origin/main`.
+- If the user says "update the local container" or "pull latest," clarify whether
+  they mean runtime only, local source sync from upstream, fork sync, or both.
+- Unless the user explicitly asks otherwise, leave `upstream` read-only and do not
+  push anything there.
+
 ---
 
 ## Profiles: Multi-Instance Support
@@ -652,6 +687,13 @@ then re-apply the PR's commits). A stale branch's version of an unrelated
 file will silently overwrite recent fixes on main when squashed. Verify
 with `git diff HEAD~1..HEAD` after merging — unexpected deletions are a
 red flag.
+
+### DO NOT treat a container refresh as a fork sync
+Refreshing with `docker-compose.upstream.yml` keeps the local runtime current,
+but it does not bring the checkout or `origin/main` closer to `upstream/main`.
+If the fork is behind upstream, a future `git pull origin main` on another
+machine will only reproduce the fork's current state, not the latest upstream
+code, until the fork itself is synced.
 
 ### Don't wire in dead code without E2E validation
 Unused code that was never shipped was dead for a reason. Before wiring an

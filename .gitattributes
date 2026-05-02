@@ -1,5 +1,9 @@
 # Auto-generated files — collapse diffs and exclude from language stats
 web/package-lock.json linguist-generated=true
 
-# Ensure shell scripts always use LF line endings (prevents CRLF on Windows checkouts)
+# Shell scripts must keep LF line endings on all platforms (CRLF breaks
+# shebang resolution inside Linux containers on Windows checkouts)
 *.sh text eol=lf
+docker/entrypoint.sh text eol=lf
+docker/deploy.sh text eol=lf
+docker/start-all.sh text eol=lf

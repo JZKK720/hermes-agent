@@ -39,6 +39,7 @@ x-hermes-common: &hermes-common
   environment:
     # UID remapping — must match your host user to avoid permission issues
     - HERMES_UID=1000
+    - HERMES_GID=1000
     # Ollama does not require a real API key; any non-empty string satisfies the field
     - OPENAI_API_KEY=ollama
     # Postgres DSN — available to memory plugins and skills
@@ -64,6 +65,7 @@ services:
     command: ["dashboard", "--host", "0.0.0.0", "--port", "9119", "--no-open", "--insecure"]
     environment:
       - HERMES_UID=1000
+      - HERMES_GID=1000
       - OPENAI_API_KEY=ollama
       - DATABASE_URL=postgresql://hermes:${POSTGRES_PASSWORD:-changeme}@postgres:5432/hermes
       - GATEWAY_HEALTH_URL=http://hermes-gateway:8789
@@ -86,6 +88,7 @@ services:
       - "8644:8644"     # Webhook platform
     environment:
       - HERMES_UID=1000
+      - HERMES_GID=1000
       - OPENAI_API_KEY=ollama
       - DATABASE_URL=postgresql://hermes:${POSTGRES_PASSWORD:-changeme}@postgres:5432/hermes
       # Allow OpenSpace runtime (port 8788) to call the agent API

@@ -1,0 +1,96 @@
+# Standalone compose file for running the local stack against a pulled
+# upstream Hermes image while keeping the local ./data env and config mounts.
+#
+# Examples:
+#   docker compose -f docker-compose.upstream.yml pull
+#   docker compose -f docker-compose.upstream.yml up -d
+#
+# Override HERMES_UPSTREAM_IMAGE if you want a different upstream tag:
+#   HERMES_UPSTREAM_IMAGE=nousresearch/hermes-agent:v2026.4.23 \
+#     docker compose -f docker-compose.upstream.yml up -d
+
+x-hermes-common: &hermes-common
+  image: ${HERMES_UPSTREAM_IMAGE:-nousresearch/hermes-agent:latest}
+  pull_policy: always
+  restart: unless-stopped
+  volumes:
+    - ./data:/opt/data
+    - ./docker/hermes-config.yaml:/opt/hermes/cli-config.yaml.example:ro
+    # entrypoint.sh is NOT mounted here — the upstream image bakes in its own
+    # working entrypoint. Mounting a Windows-checked-out copy causes CRLF
+    # failures (tini: No such file or directory).
+  environment:
+    - HERMES_UID=1000
+    - HERMES_GID=1000
+    - OPENAI_API_KEY=ollama
+    - DATABASE_URL=postgresql://hermes:${POSTGRES_PASSWORD:-changeme}@postgres:5432/hermes
+  env_file:
+    - path: ./data/.env
+      required: false
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+services:
+  hermes-web:
+    <<: *hermes-common
+    container_name: hermes-web
+    command: ["dashboard", "--host", "0.0.0.0", "--port", "9119", "--no-open", "--insecure"]
+    environment:
+      - HERMES_UID=1000
+      - HERMES_GID=1000
+      - OPENAI_API_KEY=ollama
+      - DATABASE_URL=postgresql://hermes:${POSTGRES_PASSWORD:-changeme}@postgres:5432/hermes
+      - GATEWAY_HEALTH_URL=http://hermes-gateway:8789
+    ports:
+      - "9119:9119"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:9119/api/status'); sys.exit(0 if r.status==200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  hermes-gateway:
+    <<: *hermes-common
+    container_name: hermes-gateway
+    command: ["gateway", "run"]
+    ports:
+      - "8789:8789"
+      - "8644:8644"
+    environment:
+      - HERMES_UID=1000
+      - HERMES_GID=1000
+      - OPENAI_API_KEY=ollama
+      - DATABASE_URL=postgresql://hermes:${POSTGRES_PASSWORD:-changeme}@postgres:5432/hermes
+      - API_SERVER_CORS_ORIGINS=http://localhost:8788,http://host.docker.internal:8788
+      - API_SERVER_KEY=${API_SERVER_KEY:-28765d337208aa3c0b6671cb1969e8cad9c22d7b7967b216}
+      - GATEWAY_ALLOW_ALL_USERS=true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      hermes-web:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: hermes-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: hermes
+      POSTGRES_USER: hermes
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hermes -d hermes"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
