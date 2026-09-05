@@ -861,6 +861,12 @@ if AIOHTTP_AVAILABLE:
     async def security_headers_middleware(request, handler):
         """Add security headers to all responses (including errors)."""
         response = await handler(request)
+        if response is None:
+            # A handler may return None (e.g. a streamed/SSE path that
+            # already committed a response, or a code path that didn't
+            # build an aiohttp response). Setting headers on None raises
+            # AttributeError and 500s every request to that route.
+            return response
         for k, v in _SECURITY_HEADERS.items():
             response.headers.setdefault(k, v)
         return response
