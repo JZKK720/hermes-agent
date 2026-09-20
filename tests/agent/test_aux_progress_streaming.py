@@ -23,12 +23,12 @@ from agent.auxiliary_client import (
     _aggregate_chat_stream_async,
     _anthropic_event_has_content,
     _aux_stream_total_ceiling,
-    _codex_event_has_content,
     _create_with_progress,
     _notify_aux_progress,
     _provider_requires_stream,
     aux_progress_hook,
 )
+from agent.codex_runtime import _codex_event_has_content
 from agent.conversation_compression import CompressionCommitFence
 
 
@@ -148,6 +148,18 @@ class TestCreateWithProgress:
         # 1 dispatch tick (preserved for the watchdog's historical liveness
         # signal — see _create_with_progress) + 1 per substantive chunk.
         assert ticks == [1, 1, 1, 1]
+
+    def test_reasoning_only_in_model_extra_is_captured_and_counts_as_progress(self):
+        # Non-SDK delta objects (proxies, relays) may carry reasoning only in ``model_extra``;
+        # the accumulator must read it like the main streaming path does (#56516).
+        chunk = _chunk(finish_reason="stop")
+        chunk.choices[0].delta.model_extra = {"reasoning_content": "thinking..."}
+        client = _FakeClient(stream_chunks=[chunk])
+        ticks = []
+        with aux_progress_hook(lambda: ticks.append(1)):
+            result = _create_with_progress(client, {"model": "m1", "messages": [], "timeout": 30})
+        assert result.choices[0].message.reasoning == "thinking..."
+        assert ticks == [1, 1]  # dispatch tick + the reasoning chunk
 
     def test_completed_response_ticks_only_terminal_signals(self):
         calls = []
