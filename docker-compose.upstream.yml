@@ -82,6 +82,14 @@ services:
       # survives `docker compose up`, instead of living in the container's
       # writable layer where a re-pull wipes it.
       - ./gateway/platforms/api_server.py:/opt/hermes/gateway/platforms/api_server.py
+      # Durable fix for WeChat QR login. The QR onboarding route and the
+      # WeixinQRSessionManager live in the DASHBOARD service, so this mount
+      # belongs here as well as on hermes-gateway. The published image's
+      # weixin_qr_session.py imports '_get_ssl_context', which the adapter no
+      # longer defines (upstream consolidated TLS handling into
+      # '_make_ssl_connector' + '_new_session'), so the QR flow died with
+      # "cannot import name '_get_ssl_context'" and never rendered a QR.
+      - ./gateway/platforms/weixin_qr_session.py:/opt/hermes/gateway/platforms/weixin_qr_session.py
       - ./docker/hermes-config.yaml:/opt/hermes/cli-config.yaml.example:ro
       # The dashboard container registers a placeholder gateway-default log
       # service under /run/service during boot. Keep its log dir private so it
@@ -120,7 +128,16 @@ services:
       # merging, so ./data and the workspace mount are repeated here.
       - ./data:/opt/data
       - ${CUBECLOUD_WORKSPACE_DIR:-${USERPROFILE}/cubecloud-workspace}:/workspace
+      # Durable fix for the chat-completions stub. The published image ships
+      # APIServerAdapter._handle_chat_completions as a stub that returns None,
+      # which the security-headers middleware dereferences into a generic 500.
       - ./gateway/platforms/api_server.py:/opt/hermes/gateway/platforms/api_server.py
+      # Durable fix for WeChat QR login. The published image's
+      # weixin_qr_session.py imports '_get_ssl_context', which the adapter no
+      # longer defines (upstream consolidated TLS handling into
+      # '_make_ssl_connector' + '_new_session'), so every QR login failed with
+      # "cannot import name '_get_ssl_context'" and no QR could ever render.
+      - ./gateway/platforms/weixin_qr_session.py:/opt/hermes/gateway/platforms/weixin_qr_session.py
       - ./docker/hermes-config.yaml:/opt/hermes/cli-config.yaml.example:ro
     ports:
       - "8642:8642"
