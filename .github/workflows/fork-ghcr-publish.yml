@@ -26,9 +26,20 @@ on:
       - 'package-lock.json'
       - 'Dockerfile'
       - 'docker/**'
+      # Compose files carry the deployment wrapper (image ref, mounts,
+      # HERMES_WRITE_SAFE_ROOT). A change there is deployment-relevant even
+      # though it does not alter the image contents, so keep it in scope for
+      # an explicit dispatch. Note these are NOT matched by 'docker/**'.
+      - 'docker-compose*.yml'
       - 'web/**'
       - 'skills/**'
       - '.github/workflows/fork-ghcr-publish.yml'
+  # Manual trigger. The push trigger proved unreliable on this fork: the
+  # 2026-09-20 sync (b21f38a5dc then c97ad39bb3, both matching the path filter)
+  # produced zero workflow runs while `schedule`-driven workflows kept firing,
+  # and GHCR `:latest` stayed on the previous build. Dispatching from the
+  # Actions tab always works, so this is the reliable path to rebuild.
+  workflow_dispatch:
 
 permissions:
   contents: read

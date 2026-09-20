@@ -243,8 +243,7 @@ class WeixinQRSessionManager:
                 EP_GET_QR_STATUS,
                 QR_TIMEOUT_MS,
                 _api_get,
-                _make_ssl_connector,
-                _get_ssl_context,
+                _new_session,
                 save_weixin_account,
             )
 
@@ -255,14 +254,14 @@ class WeixinQRSessionManager:
 
             import aiohttp
 
-            connector = _make_ssl_connector()
-            ssl_ctx = _get_ssl_context() if connector is None else None
-            session_kwargs = {"trust_env": True}
-            if connector is not None:
-                session_kwargs["connector"] = connector
-            elif ssl_ctx is not None:
-                session_kwargs["ssl"] = ssl_ctx
-            async with aiohttp.ClientSession(**session_kwargs) as aiohttp_session:
+            # Use the adapter's canonical session factory. It already builds the
+            # certifi-backed SSL connector and resolves trust_env correctly, so the
+            # QR flow cannot drift from the adapter's TLS behaviour. (The previous
+            # code imported `_get_ssl_context`, which upstream removed when it
+            # consolidated connector/TLS handling into `_make_ssl_connector` /
+            # `_new_session` — the stale import made every QR login fail with
+            # "cannot import name '_get_ssl_context'".)
+            async with _new_session() as aiohttp_session:
                 session._aiohttp_session = aiohttp_session
                 session._current_base_url = ILINK_BASE_URL
 
