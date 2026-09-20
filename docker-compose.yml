@@ -41,6 +41,11 @@ x-hermes-common: &hermes-common
   volumes:
     # Runtime data (sessions, memories, skills, config) — persisted on host
     - ./data:/opt/data
+    # Shared cubecloud-agent workspace. The native host server resolves
+    # ~/cubecloud-workspace; binding it at a FIXED container path means the
+    # container side never has to track the host directory name. Point
+    # CUBECLOUD_WORKSPACE_DIR at a different folder to relocate it.
+    - ${CUBECLOUD_WORKSPACE_DIR:-${USERPROFILE}/cubecloud-workspace}:/workspace
     # Deployment config template — auto-copied to data/config.yaml on first start
     - ./docker/hermes-config.yaml:/opt/hermes/cli-config.yaml.example:ro
     # Use the upstream image's baked-in entrypoint. Overlaying docker/entrypoint.sh
@@ -50,6 +55,11 @@ x-hermes-common: &hermes-common
     - HERMES_UID=1000
     - HERMES_GID=1000
     - HERMES_LAZY_INSTALL_TARGET=/opt/data/lazy-packages
+    # /opt/data is the image default (Dockerfile:396). /workspace MUST be
+    # added or agent/file_safety.py denies every write under it — the mount
+    # would look correct and fail silently with an "outside
+    # HERMES_WRITE_SAFE_ROOT" error. os.pathsep-separated list of prefixes.
+    - HERMES_WRITE_SAFE_ROOT=/opt/data:/workspace
     # Ollama does not require a real API key; any non-empty string satisfies the field
     - OPENAI_API_KEY=ollama
     # Ollama lives on the Docker host. host.docker.internal resolves via the
@@ -85,6 +95,9 @@ services:
       - GATEWAY_HEALTH_URL=http://hermes-gateway:8642
     volumes:
       - ./data:/opt/data
+      # Repeated from the anchor: hermes-web declares its own volumes list,
+      # and a YAML merge key replaces a sequence instead of deep-merging it.
+      - ${CUBECLOUD_WORKSPACE_DIR:-${USERPROFILE}/cubecloud-workspace}:/workspace
       - ./docker/hermes-config.yaml:/opt/hermes/cli-config.yaml.example:ro
       # The dashboard container registers a placeholder gateway-default log
       # service under /run/service during boot. Keep its log dir private so it
@@ -111,6 +124,25 @@ services:
       - API_SERVER_HOST=0.0.0.0
       - API_SERVER_CORS_ORIGINS=http://localhost:8788,http://host.docker.internal:8788,http://127.0.0.1:5173,http://localhost:5173
       - GATEWAY_ALLOW_ALL_USERS=true
+      # /opt/data is the image default (Dockerfile:396). /workspace MUST be
+      # added or agent/file_safety.py denies every write under it — the mount
+      # would look correct and fail silently with an "outside
+      # HERMES_WRITE_SAFE_ROOT" error. os.pathsep-separated list of prefixes.
+      - HERMES_WRITE_SAFE_ROOT=/opt/data:/workspace
+    volumes:
+      # This service declares its own volumes list, which REPLACES the
+      # anchor's rather than merging, so ./data and the workspace mount are
+      # repeated here.
+      - ./data:/opt/data
+      - ${CUBECLOUD_WORKSPACE_DIR:-${USERPROFILE}/cubecloud-workspace}:/workspace
+      # Durable fix for the chat-completions stub. The published image ships
+      # APIServerAdapter._handle_chat_completions as a stub that returns None,
+      # which the security-headers middleware dereferences into a generic 500.
+      # The repo carries the delegating fix; mounting the file means the fix
+      # survives `docker compose up`, instead of living in the container's
+      # writable layer where a re-pull wipes it.
+      - ./gateway/platforms/api_server.py:/opt/hermes/gateway/platforms/api_server.py
+      - ./docker/hermes-config.yaml:/opt/hermes/cli-config.yaml.example:ro
     ports:
       - "8642:8642"
       - "8789:8789"

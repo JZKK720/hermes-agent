@@ -3475,11 +3475,13 @@ class APIServerAdapter(OpenAICompatRoutesMixin, BasePlatformAdapter):
 
     @_admit_api_agent_request
     async def _handle_chat_completions(self, request: "web.Request") -> "web.Response":
-        """POST /v1/chat/completions — OpenAI Chat Completions format."""
-        # Bound total in-flight agent runs (configurable; #7483).
-        limited = self._concurrency_limited_response()
-        if limited is not None:
-            return limited
+        """POST /v1/chat/completions — OpenAI Chat Completions format.
+
+        Delegates to ``OpenAICompatRoutesMixin._handle_chat_completions``, which
+        owns the full request handling (concurrency bound, JSON parse, message
+        normalization, session continuation, agent dispatch, SSE streaming).
+        """
+        return await super()._handle_chat_completions(request)
 
     # -- Cron jobs API ----------------------------------------------------------------
 
