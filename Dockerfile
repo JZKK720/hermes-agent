@@ -7,36 +7,36 @@ ARG SQLITE_AUTOCONF_VERSION=3530400
 ARG SQLITE_SHA256=0e9483900e92cd5de8fd48d16bf9200145a61f7fd5be542a5ac81d8a9516eb9c
 RUN apt-get -o Acquire::Retries=3 update && \
     apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
-    build-essential ca-certificates curl && \
+        build-essential ca-certificates curl && \
     rm -rf /var/lib/apt/lists/* && \
     (curl -fsSL --retry 1 --retry-all-errors --connect-timeout 15 --max-time 60 \
-    -o /tmp/sqlite.tar.gz \
-    "https://sqlite.org/2026/sqlite-autoconf-${SQLITE_AUTOCONF_VERSION}.tar.gz" || \
-    curl -fsSL --retry 3 --retry-all-errors --connect-timeout 15 --max-time 120 \
-    -o /tmp/sqlite.tar.gz \
-    "https://sources.buildroot.net/sqlite/sqlite-autoconf-${SQLITE_AUTOCONF_VERSION}.tar.gz") && \
+        -o /tmp/sqlite.tar.gz \
+        "https://sqlite.org/2026/sqlite-autoconf-${SQLITE_AUTOCONF_VERSION}.tar.gz" || \
+     curl -fsSL --retry 3 --retry-all-errors --connect-timeout 15 --max-time 120 \
+        -o /tmp/sqlite.tar.gz \
+        "https://sources.buildroot.net/sqlite/sqlite-autoconf-${SQLITE_AUTOCONF_VERSION}.tar.gz") && \
     printf '%s  %s\n' "${SQLITE_SHA256}" /tmp/sqlite.tar.gz > /tmp/sqlite.sha256 && \
     sha256sum -c /tmp/sqlite.sha256 && \
     tar -xzf /tmp/sqlite.tar.gz -C /tmp && \
     cd "/tmp/sqlite-autoconf-${SQLITE_AUTOCONF_VERSION}" && \
     CFLAGS="-O2 \
-    -DSQLITE_ENABLE_FTS3 \
-    -DSQLITE_ENABLE_FTS3_PARENTHESIS \
-    -DSQLITE_ENABLE_FTS4 \
-    -DSQLITE_ENABLE_FTS5 \
-    -DSQLITE_ENABLE_RTREE \
-    -DSQLITE_ENABLE_GEOPOLY \
-    -DSQLITE_ENABLE_COLUMN_METADATA \
-    -DSQLITE_ENABLE_UNLOCK_NOTIFY \
-    -DSQLITE_ENABLE_DBSTAT_VTAB \
-    -DSQLITE_ENABLE_DBPAGE_VTAB \
-    -DSQLITE_ENABLE_MATH_FUNCTIONS \
-    -DSQLITE_ENABLE_PREUPDATE_HOOK \
-    -DSQLITE_ENABLE_SESSION \
-    -DSQLITE_SECURE_DELETE \
-    -DSQLITE_THREADSAFE=1 \
-    -DSQLITE_MAX_VARIABLE_NUMBER=250000" \
-    ./configure --prefix=/opt/sqlite-fixed --disable-static && \
+        -DSQLITE_ENABLE_FTS3 \
+        -DSQLITE_ENABLE_FTS3_PARENTHESIS \
+        -DSQLITE_ENABLE_FTS4 \
+        -DSQLITE_ENABLE_FTS5 \
+        -DSQLITE_ENABLE_RTREE \
+        -DSQLITE_ENABLE_GEOPOLY \
+        -DSQLITE_ENABLE_COLUMN_METADATA \
+        -DSQLITE_ENABLE_UNLOCK_NOTIFY \
+        -DSQLITE_ENABLE_DBSTAT_VTAB \
+        -DSQLITE_ENABLE_DBPAGE_VTAB \
+        -DSQLITE_ENABLE_MATH_FUNCTIONS \
+        -DSQLITE_ENABLE_PREUPDATE_HOOK \
+        -DSQLITE_ENABLE_SESSION \
+        -DSQLITE_SECURE_DELETE \
+        -DSQLITE_THREADSAFE=1 \
+        -DSQLITE_MAX_VARIABLE_NUMBER=250000" \
+        ./configure --prefix=/opt/sqlite-fixed --disable-static && \
     make -j"$(nproc)" && \
     make install
 
@@ -73,6 +73,24 @@ RUN apt-get -o Acquire::Retries=3 update && \
     ca-certificates curl iputils-ping python3 python-is-python3 ripgrep ffmpeg gcc g++ make cmake python3-dev python3-venv libffi-dev libolm-dev libatomic1 procps git openssh-client docker-cli xz-utils && \
     rm -rf /var/lib/apt/lists/*
 
+# Bot Screen (opt-in): PACKAGES["apt"] from tools/bot_desktop/runtime.py plus apt
+# `chromium` for the dock's Browser icon. ~930 MB apt on debian:13.4 (~1.4 GB of
+# image once the gated headed Chromium below is counted); nothing starts
+# at boot. docker.yml builds both variants and publishes these packages under
+# the `-desktop` tags: hosted sandboxes pull a prebuilt image and never run a
+# build, and cannot apt at run time either (unprivileged, no sudo). Only this
+# build step needs root —
+# Xvnc is a userspace X server, so the runtime user can drive it.
+#   docker build --build-arg HERMES_BOT_DESKTOP=1 .
+ARG HERMES_BOT_DESKTOP=0
+RUN if [ "$HERMES_BOT_DESKTOP" = "1" ]; then \
+        apt-get -o Acquire::Retries=3 update && \
+        DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
+        tigervnc-standalone-server xfce4-panel xfwm4 xfdesktop4 xfce4-settings xfce4-terminal \
+        dbus-x11 x11-xserver-utils x11-utils x11-xkb-utils xauth fonts-dejavu-core chromium && \
+        rm -rf /var/lib/apt/lists/*; \
+    fi
+
 # Prefer the fixed SQLite over Debian's vulnerable libsqlite3.so.0. Keep the
 # public library name stable so both the system interpreter and the uv-created
 # venv resolve the replacement without changing Python import paths.
@@ -82,13 +100,13 @@ RUN ln -sf libsqlite3.so.3.53.4 /usr/local/lib/libsqlite3.so.0 && \
     printf '/usr/local/lib\n' > /etc/ld.so.conf.d/000-sqlite-fixed.conf && \
     ldconfig && \
     python3 -c "import sqlite3, sys; \
-    v = sqlite3.sqlite_version_info; \
-    sys.exit(f'linked SQLite {sqlite3.sqlite_version} still has the WAL-reset bug') if v < (3, 51, 3) else None; \
-    db = sqlite3.connect(':memory:'); \
-    db.execute(\"CREATE VIRTUAL TABLE docs USING fts5(content, tokenize='trigram')\"); \
-    db.execute(\"INSERT INTO docs VALUES ('hermes')\"); \
-    sys.exit('SQLite FTS5 trigram self-test failed') if db.execute(\"SELECT count(*) FROM docs WHERE docs MATCH 'erm'\").fetchone()[0] != 1 else None; \
-    db.close()"
+v = sqlite3.sqlite_version_info; \
+sys.exit(f'linked SQLite {sqlite3.sqlite_version} still has the WAL-reset bug') if v < (3, 51, 3) else None; \
+db = sqlite3.connect(':memory:'); \
+db.execute(\"CREATE VIRTUAL TABLE docs USING fts5(content, tokenize='trigram')\"); \
+db.execute(\"INSERT INTO docs VALUES ('hermes')\"); \
+sys.exit('SQLite FTS5 trigram self-test failed') if db.execute(\"SELECT count(*) FROM docs WHERE docs MATCH 'erm'\").fetchone()[0] != 1 else None; \
+db.close()"
 
 # ---------- s6-overlay install ----------
 # s6-overlay provides supervision for the main hermes process, the dashboard,
@@ -112,21 +130,21 @@ ARG S6_OVERLAY_AARCH64_SHA256=0952056ff913482163cc30e35b2e944b507ba1025d78f5becb
 ARG S6_OVERLAY_SYMLINKS_SHA256=a60dc5235de3ecbcf874b9c1f18d73263ab99b289b9329aa950e8729c4789f0e
 RUN set -eu; \
     case "${TARGETARCH:-amd64}" in \
-    amd64) s6_arch="x86_64"; s6_arch_sha="${S6_OVERLAY_X86_64_SHA256}" ;; \
-    arm64) s6_arch="aarch64"; s6_arch_sha="${S6_OVERLAY_AARCH64_SHA256}" ;; \
-    *) echo "Unsupported TARGETARCH=${TARGETARCH} for s6-overlay" >&2; exit 1 ;; \
+        amd64) s6_arch="x86_64"; s6_arch_sha="${S6_OVERLAY_X86_64_SHA256}" ;; \
+        arm64) s6_arch="aarch64"; s6_arch_sha="${S6_OVERLAY_AARCH64_SHA256}" ;; \
+        *) echo "Unsupported TARGETARCH=${TARGETARCH} for s6-overlay" >&2; exit 1 ;; \
     esac; \
     base="https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}"; \
     curl -fsSL --retry 3 -o /tmp/s6-overlay-noarch.tar.xz \
-    "${base}/s6-overlay-noarch.tar.xz"; \
+        "${base}/s6-overlay-noarch.tar.xz"; \
     curl -fsSL --retry 3 -o /tmp/s6-overlay-symlinks-noarch.tar.xz \
-    "${base}/s6-overlay-symlinks-noarch.tar.xz"; \
+        "${base}/s6-overlay-symlinks-noarch.tar.xz"; \
     curl -fsSL --retry 3 -o /tmp/s6-overlay-arch.tar.xz \
-    "${base}/s6-overlay-${s6_arch}.tar.xz"; \
+        "${base}/s6-overlay-${s6_arch}.tar.xz"; \
     { \
-    printf '%s  %s\n' "${S6_OVERLAY_NOARCH_SHA256}" /tmp/s6-overlay-noarch.tar.xz; \
-    printf '%s  %s\n' "${s6_arch_sha}" /tmp/s6-overlay-arch.tar.xz; \
-    printf '%s  %s\n' "${S6_OVERLAY_SYMLINKS_SHA256}" /tmp/s6-overlay-symlinks-noarch.tar.xz; \
+        printf '%s  %s\n' "${S6_OVERLAY_NOARCH_SHA256}" /tmp/s6-overlay-noarch.tar.xz; \
+        printf '%s  %s\n' "${s6_arch_sha}" /tmp/s6-overlay-arch.tar.xz; \
+        printf '%s  %s\n' "${S6_OVERLAY_SYMLINKS_SHA256}" /tmp/s6-overlay-symlinks-noarch.tar.xz; \
     } > /tmp/s6-overlay.sha256; \
     sha256sum -c /tmp/s6-overlay.sha256; \
     tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz; \
@@ -196,12 +214,24 @@ COPY apps/shared/ apps/shared/
 # guards against a future regression if the source npm version changes.
 ENV npm_config_install_links=false
 
+# chrome-headless-shell: what the browser tool has always driven headlessly.
+# Smaller, no window code paths. --with-deps pulls the shared system libraries.
 RUN npm install --prefer-offline --no-audit --fetch-retries=5 && \
     for i in 1 2 3; do \
-    npx playwright install --with-deps chromium --only-shell && break || \
-    { [ "$i" = 3 ] && exit 1; echo "playwright install failed (attempt $i); retrying in 10s"; sleep 10; }; \
+        npx playwright install --with-deps chromium --only-shell && break || \
+        { [ "$i" = 3 ] && exit 1; echo "playwright headless-shell install failed (attempt $i); retrying in 10s"; sleep 10; }; \
     done && \
     npm cache clean --force
+
+# chrome-headless-shell cannot open a window, so the dock's Browser icon needs the
+# full build. Same Chromium family as the shell, so agent and human share one
+# --user-data-dir. Gated: a build with no desktop has nothing to show it on.
+RUN if [ "$HERMES_BOT_DESKTOP" = "1" ]; then \
+        for i in 1 2 3; do \
+            npx playwright install chromium && break || \
+            { [ "$i" = 3 ] && exit 1; echo "playwright chromium install failed (attempt $i); retrying in 10s"; sleep 10; }; \
+        done; \
+    fi
 
 # ---------- Photon iMessage sidecar deps (baked, NS-606) ----------
 # The photon plugin's Node sidecar needs its own node_modules
@@ -212,9 +242,9 @@ RUN npm install --prefer-offline --no-audit --fetch-retries=5 && \
 # means the spectrum-ts patch is applied at build time. Layer-cached:
 # only re-runs when the sidecar manifests/patch change.
 COPY plugins/platforms/photon/sidecar/package.json \
-    plugins/platforms/photon/sidecar/package-lock.json \
-    plugins/platforms/photon/sidecar/patch-spectrum-mixed-attachments.mjs \
-    plugins/platforms/photon/sidecar/
+     plugins/platforms/photon/sidecar/package-lock.json \
+     plugins/platforms/photon/sidecar/patch-spectrum-mixed-attachments.mjs \
+     plugins/platforms/photon/sidecar/
 RUN cd plugins/platforms/photon/sidecar && \
     npm ci --no-audit --fetch-retries=5 && \
     npm cache clean --force
@@ -247,12 +277,10 @@ RUN cd plugins/platforms/photon/sidecar && \
 # Health export is enabled. Collector and observability-backend dependencies
 # remain external and are not part of the Hermes production image.
 #
-# The hindsight memory provider's client (hindsight-client) is baked in
-# for the same reason: it lazy-installs into /opt/hermes/.venv at first
-# use, which lives inside the (immutable) image layer rather than the
-# mounted /opt/data volume, so it is lost on every container recreate /
-# image update and recall/retain then fails with
-# `ModuleNotFoundError: No module named 'hindsight_client'` (#38128).
+# Catalog memory plugins (e.g. hindsight, since it left the tree) are not
+# baked in: their pip dependencies install at plugin-install time through
+# tools/lazy_deps.py into HERMES_LAZY_INSTALL_TARGET (the durable /opt/data
+# volume, see below), so they survive container recreates (#38128).
 #
 # The Matrix gateway's deps ([matrix] extra) are baked in because
 # python-olm (transitive via mautrix[encryption]) builds from source on
@@ -269,12 +297,7 @@ RUN cd plugins/platforms/photon/sidecar && \
 # The editable link is created after the source copy below.
 COPY pyproject.toml uv.lock ./
 RUN touch ./README.md
-# --extra voice (faster-whisper) + --extra edge-tts: bake the default STT+TTS
-# providers so /v1/audio/transcriptions and /v1/audio/speech work out of the
-# box without runtime lazy-install (PyPI is often blocked in containers).
-# --extra google-chat is upstream's addition (baked so hosted/immutable images
-# can enable the Google Chat adapter without writing the sealed venv).
-RUN uv sync --frozen --no-install-project --extra all --extra messaging --extra otlp --extra anthropic --extra bedrock --extra azure-identity --extra hindsight --extra matrix --extra google-chat --extra voice --extra edge-tts
+RUN uv sync --frozen --no-install-project --extra all --extra messaging --extra otlp --extra anthropic --extra bedrock --extra azure-identity --extra matrix --extra google-chat --extra voice --extra edge-tts --extra piper
 
 # ---------- Frontend build (cached independently from Python source) ----------
 # Copy only the frontend source trees first so that Python-only changes don't
@@ -282,14 +305,17 @@ RUN uv sync --frozen --no-install-project --extra all --extra messaging --extra 
 COPY web/ web/
 COPY ui-tui/ ui-tui/
 COPY apps/shared/ apps/shared/
-# Skip `tsc -b` (type-check) — upstream TS 6 migration has unresolved type
-# errors in web/src/ (ChatSidebar, PairingPage, PluginsPage, etc.) that
-# block the Docker build.  `vite build` uses esbuild and does not type-check,
-# so the production bundle is unaffected.  Upstream's own Docker workflow is
-# gated on `github.repository == 'NousResearch/hermes-agent'` and may be
-# similarly broken on cold builds.
-RUN cd web && npx vite build && \
+RUN cd web && npm run build && \
     cd ../ui-tui && npm run build
+
+# ---------- Bot Screen X socket directory ----------
+# Xvnc would create this itself (/tmp is 1777); pre-creating it keeps ownership
+# deterministic when HERMES_UID is remapped between boots.
+RUN mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
+
+# XDG_RUNTIME_DIR (set below) sits under a predictable name in world-writable /tmp.
+# Shipping it root-owned means stage2 finds a directory it trusts and chowns it.
+RUN mkdir -p /tmp/hermes-runtime && chmod 0700 /tmp/hermes-runtime
 
 # ---------- Source code ----------
 # .dockerignore excludes node_modules, so the installs above survive.
@@ -375,7 +401,7 @@ COPY docker/s6-rc.d/ /etc/s6-overlay/s6-rc.d/
 # (the /run/service/ scandir is tmpfs and wiped on restart). Phase 4.
 RUN mkdir -p /etc/cont-init.d && \
     printf '#!/command/with-contenv sh\nexec /opt/hermes/docker/stage2-hook.sh\n' \
-    > /etc/cont-init.d/01-hermes-setup && \
+        > /etc/cont-init.d/01-hermes-setup && \
     chmod +x /etc/cont-init.d/01-hermes-setup
 COPY --chmod=0755 docker/cont-init.d/015-supervise-perms /etc/cont-init.d/015-supervise-perms
 COPY --chmod=0755 docker/cont-init.d/02-reconcile-profiles /etc/cont-init.d/02-reconcile-profiles
@@ -415,6 +441,12 @@ ENV HERMES_DISABLE_LAZY_INSTALLS=1
 # on the /opt/data volume, so it persists across container recreates / image
 # updates (an ABI stamp invalidates it if a rebuild bumps the interpreter).
 ENV HERMES_LAZY_INSTALL_TARGET=/opt/data/lazy-packages
+
+# Xfce, dbus and the display-allocation lock need one; containers have no logind
+# to create /run/user/<uid>. The default fallback ($HOME/.cache) is the /opt/data
+# volume, which a host-side install may share — two instances would then contend
+# for one lock. Container-scoped instead; seeded 0700 by docker/stage2-hook.sh.
+ENV XDG_RUNTIME_DIR=/tmp/hermes-runtime
 
 # `docker exec` privilege-drop shim. When operators run
 # `docker exec <c> hermes ...` they default to root, and any file the

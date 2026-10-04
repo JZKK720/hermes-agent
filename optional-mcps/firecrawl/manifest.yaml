@@ -32,8 +32,12 @@ transport:
 auth:
   type: api_key
   env:
-    - name: FIRECRAWL_API_KEY
+    - name: MCP_FIRECRAWL_API_KEY
       prompt: "Firecrawl API key (starts with fc-). Press Enter to skip and use the keyless free tier (rate-limited)."
+      required: false
+      secret: true
+    - name: FIRECRAWL_API_KEY
+      prompt: "Firecrawl API key for the web search/extract plugin (starts with fc-)"
       required: false
       secret: true
 
