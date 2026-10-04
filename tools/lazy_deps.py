@@ -615,7 +615,19 @@ def _venv_pip_install(specs: tuple[str, ...], *, timeout: int = 300, constraint_
     try:
         from tools.environments.local import hermes_subprocess_env
         uv_env = hermes_subprocess_env(inherit_credentials=False)
-        uv_env["VIRTUAL_ENV"] = str(Path(sys.executable).parent.parent)
+        # VIRTUAL_ENV must point at the venv ROOT, whose layout differs by
+        # platform: POSIX is <venv>/bin/python, Windows is <venv>/Scripts/
+        # python.exe. The old parent.parent assumed POSIX and, when Hermes
+        # runs on a system Python (no venv at all), produced nonsense like
+        # C:\Program Files — uv then failed inspecting
+        # "C:\Program Files\Scripts\python.exe" and the whole lazy install
+        # aborted (voice/STT deps never installed → VAD never listened).
+        exe_dir = Path(sys.executable).parent
+        in_venv = (
+            exe_dir.name == "bin" or exe_dir.name == "Scripts"
+        ) and sys.prefix != getattr(sys, "base_prefix", sys.prefix)
+        if in_venv:
+            uv_env["VIRTUAL_ENV"] = str(exe_dir.parent)
         # Tier 1: uv. --compile-bytecode because uv writes no __pycache__ by default, so the first
         # import would recompile the backend AND its transitives (_warm_installed_bytecode is the
         # belt-and-braces pass for the spec's own roots on any tier).
@@ -631,10 +643,21 @@ def _venv_pip_install(specs: tuple[str, ...], *, timeout: int = 300, constraint_
                                    timeout=timeout, env=uv_env, cwd=uv_cwd)
                 if r.returncode != 0:
                     logger.debug("uv pip install failed: %s", r.stderr)
-                # A uv resolver failure is authoritative: falling through to pip would discard uv
+                # A RESOLVER failure is authoritative: falling through to pip would discard uv
                 # policy (exclude-newer for core; the constraints file for both) and could install a
-                # quarantined or out-of-range release.
-                return _finish(r)
+                # quarantined or out-of-range release. An ENVIRONMENT failure (broken/missing
+                # interpreter, bad VIRTUAL_ENV, unreadable cache) is not resolver policy — the pip
+                # tier targets sys.executable directly and can still succeed, so fall through there
+                # (the "failed to inspect Python interpreter" shape aborted the whole ladder).
+                stderr_l = (r.stderr or "").lower()
+                env_failure_markers = (
+                    "failed to inspect python interpreter",
+                    "python interpreter not found",
+                    "no python found",
+                    "no virtual environment found",
+                )
+                if not any(m in stderr_l for m in env_failure_markers):
+                    return _finish(r)
             except subprocess.TimeoutExpired as e:
                 logger.debug("uv invocation failed: %s", e)
                 # Actionable context for the #95608 shape: a 300s stall with
