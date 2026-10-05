@@ -473,9 +473,20 @@ def _validated_main_model_selection(
     one, which is how ``switch_model`` binds a custom base_url/key. Rejections become 400s."""
     from hermes_cli.config import get_compatible_custom_providers
     from hermes_cli.model_switch import switch_model
+    from hermes_cli.runtime_provider import _config_base_url_trustworthy_for_bare_custom
 
     model_cfg = cfg.get("model") if isinstance(cfg.get("model"), dict) else {}
     is_bare_custom = provider.strip().lower() in {"custom", "local"}
+    if is_bare_custom and not base_url.strip():
+        # A model-picker pick names provider+model only — the body carries no endpoint. Fall back
+        # to the configured ``model.base_url`` (the same trust source the runtime's bare-custom
+        # ladder uses): without it the bare-custom completion in ``_bare_custom_provider_def``
+        # got an empty string and the pick died as "Unknown provider 'custom'" even though the
+        # configured route (model.provider=custom + model.base_url) was perfectly valid.
+        configured_url = str(model_cfg.get("base_url") or "").strip()
+        if isinstance(cfg, dict) and configured_url and _config_base_url_trustworthy_for_bare_custom(
+                configured_url, str(model_cfg.get("provider") or "")):
+            base_url = configured_url
     result = switch_model(
         raw_input=model, explicit_provider=provider, is_global=True,
         current_provider=str(model_cfg.get("provider") or ""), current_model=str(model_cfg.get("default") or ""),
