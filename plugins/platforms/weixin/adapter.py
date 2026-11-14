@@ -49,6 +49,28 @@ def _extra_or_secret(extra: dict[str, Any], key: str, default: str = "") -> str:
 
 ILINK_BASE_URL = "https://ilinkai.weixin.qq.com"
 WEIXIN_CDN_BASE_URL = "https://novac2c.cdn.weixin.qq.com/c2c"
+
+
+def normalise_ilink_base_url(raw_url: str) -> str:
+    """Normalise an iLink base URL to the canonical endpoint.
+
+    iLink sometimes returns ``ilinkai.wechat.com`` (missing ``.qq.com``) or other variant
+    domains in its QR responses. Saving one verbatim points every later ``getupdates`` at a
+    host that does not serve the bot, which surfaces as a silent "Session expired". Require an
+    exact HTTPS hostname match against the canonical host before keeping a server-provided URL.
+
+    Lives here rather than in core: this is iLink protocol knowledge, and core importing it
+    from a plugin would invert the plugin/core boundary.
+    """
+    from urllib.parse import urlparse
+
+    try:
+        parsed = urlparse(raw_url)
+        if parsed.scheme == "https" and parsed.hostname == "ilinkai.weixin.qq.com":
+            return raw_url
+    except Exception:
+        pass
+    return ILINK_BASE_URL
 ILINK_APP_ID, CHANNEL_VERSION, ILINK_APP_CLIENT_VERSION = "bot", "2.2.0", (2 << 16) | (2 << 8) | 0
 EP_GET_UPDATES, EP_SEND_MESSAGE, EP_SEND_TYPING = "ilink/bot/getupdates", "ilink/bot/sendmessage", "ilink/bot/sendtyping"
 EP_GET_CONFIG, EP_GET_UPLOAD_URL = "ilink/bot/getconfig", "ilink/bot/getuploadurl"
@@ -642,9 +664,8 @@ async def qr_login(hermes_home: str, *, bot_type: str = "3", timeout_seconds: in
                     # domain (e.g. ilinkai.wechat.com instead of
                     # ilinkai.weixin.qq.com). Always normalise to the canonical
                     # endpoint to avoid silent session failures.
-                    from gateway.platforms.weixin_qr_session import _normalise_ilink_base_url
                     candidate = f"https://{redirect_host}"
-                    current_base_url = _normalise_ilink_base_url(candidate)
+                    current_base_url = normalise_ilink_base_url(candidate)
             elif status == "expired":
                 refresh_count += 1
                 if refresh_count > 3:
@@ -663,11 +684,10 @@ async def qr_login(hermes_home: str, *, bot_type: str = "3", timeout_seconds: in
                 # confirmation response. Always normalise to the canonical
                 # ILINK_BASE_URL to avoid silent session failures caused by
                 # the wrong domain being saved to .env.
-                from gateway.platforms.weixin_qr_session import _normalise_ilink_base_url
                 creds = {
                     "account_id": str(status_resp.get("ilink_bot_id") or ""),
                     "token": str(status_resp.get("bot_token") or ""),
-                    "base_url": _normalise_ilink_base_url(str(status_resp.get("baseurl") or ILINK_BASE_URL)),
+                    "base_url": normalise_ilink_base_url(str(status_resp.get("baseurl") or ILINK_BASE_URL)),
                     "user_id": str(status_resp.get("ilink_user_id") or ""),
                 }
                 if not creds["account_id"] or not creds["token"]:

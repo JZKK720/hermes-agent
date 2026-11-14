@@ -489,26 +489,14 @@ def get_weixin_qr_session_manager() -> WeixinQRSessionManager:
 def _normalise_ilink_base_url(raw_url: str) -> str:
     """Normalise an iLink base URL to the canonical endpoint.
 
-    iLink sometimes returns ``ilinkai.wechat.com`` (missing ``.qq.com``) or
-    other variant domains.  Parse the URL and require an exact HTTPS hostname
-    match against ``ilinkai.weixin.qq.com`` before retaining a server-provided
-    URL; otherwise fall back to the canonical ``ILINK_BASE_URL``.
+    Thin delegate: the rule itself is iLink protocol knowledge and lives in the weixin
+    plugin (``adapter.normalise_ilink_base_url``), so the plugin never has to import
+    back into core. This keeps the dependency one-way (core -> plugin) for the callers
+    that already sit on the core side, and falls back to the canonical constant when the
+    plugin is not importable.
     """
-    from urllib.parse import urlparse
-
     try:
-        parsed = urlparse(raw_url)
-        if (
-            parsed.scheme == "https"
-            and parsed.hostname == "ilinkai.weixin.qq.com"
-        ):
-            return raw_url
-    except Exception:
-        pass
-    # Try to use the canonical URL from the weixin adapter; fall back to
-    # the hardcoded constant if the adapter module isn't imported yet.
-    try:
-        from plugins.platforms.weixin.adapter import ILINK_BASE_URL
-        return ILINK_BASE_URL
+        from plugins.platforms.weixin.adapter import normalise_ilink_base_url
     except ImportError:
         return _CANONICAL_ILINK_BASE_URL
+    return normalise_ilink_base_url(raw_url)

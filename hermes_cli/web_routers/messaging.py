@@ -1037,8 +1037,8 @@ async def apply_weixin_onboarding(
             save_env_value("WEIXIN_ACCOUNT_ID", credentials["account_id"])
             save_env_value("WEIXIN_TOKEN", credentials["token"])
             # Defensive: normalise to the canonical iLink endpoint (fork fix).
-            from gateway.platforms.weixin_qr_session import _normalise_ilink_base_url
-            save_env_value("WEIXIN_BASE_URL", _normalise_ilink_base_url(credentials["base_url"]))
+            from plugins.platforms.weixin.adapter import normalise_ilink_base_url
+            save_env_value("WEIXIN_BASE_URL", normalise_ilink_base_url(credentials["base_url"]))
             _write_platform_enabled("weixin", True)
     except HTTPException:
         raise
