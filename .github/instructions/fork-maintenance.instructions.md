@@ -44,3 +44,48 @@ applyTo:
 - For upstream-image stacks, use `docker compose -f docker-compose.upstream.yml up -d --pull always --force-recreate --remove-orphans`.
 - Check `docker compose ps`, the dashboard health endpoint `http://127.0.0.1:9119/api/status`, and the agent API `http://127.0.0.1:8642/v1/models` when available.
 - Report any step that would change credentials, rebuild volumes, or replace mounted config before doing it.
+## Gateway container exiting 75 / "Another gateway already owns this host"
+
+Symptom: `hermes-gateway` sits at `Exited (137)` or restarts forever, its logs repeat
+`❌ Another gateway already owns this host: PID <n> (no bound port; profiles: default)`,
+and `8642`/`8644` never bind on the host. `hermes-web` reports healthy the whole time.
+
+Cause: both containers share the bind-mounted `data/` → `/opt/data`, and **exactly one
+gateway per host** may own the lock in `/opt/data/.local/state/hermes/gateway-locks/`.
+The image's boot reconciler (`/etc/cont-init.d/02-reconcile-profiles` →
+`hermes_cli/container_boot.py`) decides each container's role from **its own argv**. If
+`hermes-web`'s `command:` wraps the hermes invocation in a shell
+(`["sh", "-lc", "… exec hermes dashboard …"]`), the role reads as "not the dashboard",
+so `hermes-web` registers and starts `gateway-default`, wins the lock, and the real
+gateway container starves.
+
+Diagnose:
+
+```bash
+docker exec hermes-web ls /run/hermes-service/     # gateway-default must NOT appear here
+docker exec hermes-gateway ls /run/hermes-service/ # gateway-default belongs here only
+docker exec hermes-web cat /opt/data/.local/state/hermes/gateway-locks/host-gateway.json
+```
+
+Fix: give each service its subcommand directly instead of a shell wrapper — the image's
+`docker/main-wrapper.sh` maps a non-executable `$1` to `hermes <args>`:
+
+```yaml
+# hermes-web
+command: ["dashboard", "--host", "0.0.0.0", "--port", "9119", "--no-open"]
+# hermes-gateway
+command: ["gateway", "run"]
+```
+
+Then `docker compose -f docker-compose.upstream.yml up -d --force-recreate` and confirm
+`/run/hermes-service/` no longer lists `gateway-default` inside `hermes-web`.
+
+A host-native `hermes gateway run` / `hermes dashboard` also holds `8642`/`9119` and
+makes the compose bind fail with *"Only one usage of each socket address"*; stop it
+(`hermes gateway stop`) before bringing the container stack up.
+
+Note: teaching `container_boot` to unwrap a shell `command:` was considered and
+deliberately **not** done. The compose files are ours, upstream's own compose uses the
+direct form too, and a code-side unwrap would be a second fix for an already-fixed bug —
+dead code kept alive only to guard against a YAML edit we control. Keep the subcommand
+direct instead.
