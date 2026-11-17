@@ -24,6 +24,11 @@ import argparse
 import subprocess
 import sys
 
+# A git probe that never returns would hang a sync review forever, so every
+# subprocess here carries a timeout (HX006). Local git on a large repo can take
+# a few seconds for diff --numstat; 120s is generous without masking a hang.
+GIT_TIMEOUT_SECONDS = 120
+
 
 def git(*args: str) -> str:
     # encoding is explicit: text=True alone decodes with the locale codepage
@@ -34,6 +39,7 @@ def git(*args: str) -> str:
         text=True,
         encoding="utf-8",
         errors="replace",
+        timeout=GIT_TIMEOUT_SECONDS,
         check=True,
     ).stdout.strip()
 
@@ -46,6 +52,7 @@ def try_git(*args: str) -> str:
         text=True,
         encoding="utf-8",
         errors="replace",
+        timeout=GIT_TIMEOUT_SECONDS,
         check=False,
     )
     return result.stdout.strip() if result.returncode == 0 else ""
@@ -62,12 +69,25 @@ def numstat(base: str, target: str, path: str) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--base", default="origin/main")
+    # Base is the fork tip, not origin/main: once upstream is merged, origin/main
+    # is the *old* fork state and every upstream file shows up as "changed on
+    # both sides", which buries the handful of real overlaps.
+    parser.add_argument(
+        "--base",
+        default="fork-tip-pre-sync-20261116",
+        help="fork-tip revision (the pre-sync tag), not origin/main",
+    )
     parser.add_argument("--target", default="upstream/main")
     parser.add_argument(
         "--markdown",
         action="store_true",
         help="emit the both-sides table as markdown instead of plain text",
+    )
+    parser.add_argument(
+        "--max-rows",
+        type=int,
+        default=40,
+        help="stop listing overlaps after N files (0 = no limit)",
     )
     args = parser.parse_args()
 
@@ -88,6 +108,7 @@ def main() -> int:
         subprocess.run(
             ("git", "merge-base", "--is-ancestor", target, "HEAD"),
             capture_output=True,
+            timeout=GIT_TIMEOUT_SECONDS,
             check=False,
         ).returncode
         == 0
@@ -118,23 +139,29 @@ def main() -> int:
 
     # The table that was wrong. Every file both sides touched gets a per-side
     # numstat so "the fork changed nothing" is a measurement, not an assumption.
+    #
+    # The fork side must be diffed against *base* (the pre-sync fork tip), not
+    # HEAD: once upstream is merged into HEAD, `diff merge_base..HEAD` contains
+    # every upstream change too, so the "overlap" becomes the whole upstream
+    # changeset and the real handful of collisions disappears into it.
     upstream_files = set(try_git("diff", "--name-only", merge_base, target).splitlines())
-    fork_files = set(try_git("diff", "--name-only", merge_base, "HEAD").splitlines())
+    fork_files = set(try_git("diff", "--name-only", merge_base, base).splitlines())
     both = sorted(upstream_files & fork_files)
 
     print(f"files both sides changed  : {len(both)}")
+    shown = both if args.max_rows == 0 else both[: args.max_rows]
     if args.markdown:
         print()
         print("| File | Fork side | Upstream side |")
         print("|---|---|---|")
-        for path in both:
+        for path in shown:
             print(
-                f"| `{path}` | {numstat(merge_base, 'HEAD', path)} "
+                f"| `{path}` | {numstat(merge_base, base, path)} "
                 f"| {numstat(merge_base, target, path)} |"
             )
     else:
-        for path in both:
-            fork_side = numstat(merge_base, "HEAD", path)
+        for path in shown:
+            fork_side = numstat(merge_base, base, path)
             up_side = numstat(merge_base, target, path)
             print(f"  {path}")
             print(f"    fork     {fork_side}")
