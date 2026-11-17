@@ -1,8 +1,8 @@
 # Hermes Fork Upstream Sync — Implementation Plan
 
-Status: **Tasks 1-5 and 11 complete** (merged, lint-clean, tests green, running on the merged tree).
-Tasks 6-10 (push → CI image → PR → re-pin → redeploy) remain: they publish and deploy the
-already-verified branch.
+Status: **Tasks 1-7 complete** (merged, lint-clean, tests green, branch pushed, CI image build
+dispatched). Tasks 8-10 (PR → merge → re-pin → redeploy) publish and deploy the verified
+branch.
 
 > **Result so far.** Branch `sync/upstream-20261116` at `eb4e59873b`: upstream merged
 > (`behind: 0`), `fork-only patches 89 '+' / 0 '-'`, merge conflict-free,
@@ -937,11 +937,27 @@ session started from; rollback tag `fork-tip-pre-sync-20261116` = `ce476f23b1`):
 
 | Gate | Result |
 |---|---|
-| `python scripts/fork_sync_facts.py` | `merged YES`, `behind 0`, `89 '+' 0 '-'`, `conflict-free YES` |
+| `python scripts/fork_sync_facts.py` | `merged YES`, `behind 0`, `91 '+' 0 '-'`, `conflict-free YES` |
 | `scripts/run_tests.sh tests/gateway/test_api_server.py` | **120 passed, 0 failed** (baseline: 120/0) |
 | `scripts/check` in a fresh clone | `FAILED: health` — **2 blocking, 2 advisory, identical findings to pristine `upstream/main`** |
 | `docker compose config --quiet` ×3 | `0` |
+| **CI image build (`fork-ghcr-publish.yml`)** | **success**, run `44010836099`, 8m |
 | Stack | 3/3 healthy; `9119` → 200, `8642/health` → 200; `/v1/chat/completions` returned `OK` |
+
+### Published pin for this branch build
+
+| | |
+|---|---|
+| workflow run | `44010836099` (success) |
+| commit | `b0f032421c95c5da87a94da649d36af788d43290` |
+| digest | `sha256:1fbc3bab3fc697194398c19c5898c9563d4f25607218f0bee49fd7618c59078f` |
+| image stamp | `0.23.2+113.gb0f0324`, `dirty: false`, `revision` == commit ✅ |
+
+This digest was pulled and inspected locally: its `org.opencontainers.image.revision` label
+and its `install-stamp.json` both name `b0f032421c…`, so the artifact corresponds exactly to
+the verified branch tip. **Do not deploy this digest to `main`** — it was built from the
+unmerged branch. Merge first, rebuild from `main` (Task 9), and pin *that* digest; the branch
+digest is only for proving the Dockerfile builds.
 
 The `health` ratchet cannot pass on its baseline: pristine `upstream/main` reports the same
 2 blocking findings (`tests/agent/test_redact.py` FILE_LINES, `tools/approval_home_fold.py`
