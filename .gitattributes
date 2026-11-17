@@ -11,6 +11,13 @@ uv.lock text eol=lf
 Dockerfile  text eol=lf
 *.dockerfile text eol=lf
 docker/entrypoint.sh text eol=lf
+# .gitattributes is itself matched by the `* text=auto` rule below, so a Windows
+# checkout with core.autocrlf=true rewrites IT to CRLF too. The shim generator
+# (scripts/move/generate_shims.py --check) compares this file byte-for-byte
+# against an LF render, so a CRLF checkout fails that check with
+# "<file>: differs from what scripts/move/generate_shims.py writes; run it" —
+# a difference `git diff` cannot show, because the index normalizes it away.
+.gitattributes text eol=lf
 # Extension-less executables under scripts/ (run-in-hermes-env, check,
 # hermes-gateway, hermes-python). These carry a `#!/usr/bin/env bash` shebang
 # and are `exec`'d directly, so a CRLF checkout fails identically to a *.sh one
