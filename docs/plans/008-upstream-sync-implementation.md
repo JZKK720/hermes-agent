@@ -1038,9 +1038,87 @@ cp data/config.yaml.bak-20261116 data/config.yaml
 
 ## Notes on things deliberately NOT done
 
-- **`read:org` / `read:packages` are not requested.** Eight `gh` commands were tested and
-  all exit `0` without them; the GHCR package is public, so the anonymous token in Task 9
-  Step 3 covers tag inspection. Adding scopes needs a browser round-trip for no gain.
+### Weixin `errcode=-14` — diagnosed, needs your QR scan
+
+Not a code defect. Triage per `.github/skills/weixin-reconnect/SKILL.md`:
+
+| Check | Result |
+|---|---|
+| Dashboard `gateway_platforms.weixin` | `connected`, `needs_attention: false` |
+| Gateway logs | `Session expired; pausing for 10 minutes` every 10 min |
+| `WEIXIN_BASE_URL` | `https://ilinkai.weixin.qq.com` ✅ (not the common `.wechat.com` typo) |
+| `WEIXIN_ACCOUNT_ID` / `WEIXIN_TOKEN` | present in `data/.env` |
+| Account credential file | `/opt/data/weixin/accounts/026d36b15a2d@im.bot.json`, **dated 2026-06-27** |
+
+`SESSION_EXPIRED_ERRCODE = -14` (`plugins/platforms/weixin/adapter.py:80`) is iLink's
+"token no longer valid". A five-month-old token has simply expired; only a QR re-scan
+mints a new one. **The agent cannot do this step** — the QR is short-lived and must be
+scanned by the phone holding the WeChat account.
+
+The dashboard reporting `connected` while every poll fails is expected: the adapter
+process is up, and the platform state reflects *adapter* health, not token validity. Treat
+the log line, not the badge, as the signal.
+
+Two paths, both needing you:
+
+```bash
+# A. Dashboard (recommended) — http://localhost:9119 → Channels → Weixin → "Set up with QR"
+#    then scan with WeChat.
+# B. CLI wizard, which prints the QR in the terminal:
+docker compose -f docker-compose.upstream.yml run --rm hermes-gateway hermes gateway setup
+```
+
+Why it cannot be scripted: `WeixinQRSessionManager` needs the **gateway's own event loop**
+(`set_event_loop` / `run_coroutine_threadsafe`). A side `docker exec python` has no loop, so
+`start_session` stays in `starting` forever; and the dashboard's onboarding route is
+`basic_auth`-gated while its port is bound to `127.0.0.1` on the host, so no other container
+can reach it either.
+
+### Docker Hub — root-caused and worked around in compose
+
+`--pull always` failed on `postgres:16-alpine`, and the cause is not Docker:
+
+```
+$ Resolve-DnsName registry-1.docker.io -Server 1.1.1.1   -> 157.240.0.35    (Meta)
+$ Resolve-DnsName registry-1.docker.io -Server 8.8.8.8   -> 108.160.167.158 (Dropbox)
+$ Resolve-DnsName registry-1.docker.io -Server 9.9.9.9   -> 69.63.184.142   (Meta)
+```
+
+Every resolver answers with a Meta/Twitter/Dropbox address, and a TCP 443 connect to those
+never completes. That is network-level DNS interception, so no `daemon.json` change to
+*this* host would help — the wrong answer arrives before Docker sees it.
+
+**Fixed in compose instead**, which is the part this repo owns: postgres is now
+digest-pinned (`postgres@sha256:f377d590e5…`) with `pull_policy: missing`. A digest is
+already reproducible, so re-pulling bought nothing, and `missing` stops compose re-fetching
+a digest it cannot resolve. Verified: `docker compose up -d --pull always` now **exits 0**
+and all three services stay healthy.
+
+A `registry-mirrors` entry pointing at `mirror.gcr.io` also works (that mirror is reachable
+and serves a byte-identical postgres config), but it needs a Docker Desktop restart, which
+would bounce the **34 unrelated containers** on this host. Left for you to apply if you want
+`docker pull` to work for arbitrary Hub images.
+
+### `read:org` / `read:packages` — one is a non-issue, the other has a script
+
+`read:org` blocks **nothing**: 13 command kinds were run and all exit `0`
+(`auth status`, `repo view`, `repo list`, `workflow list`, `run list`, `run view`,
+`pr list`, `pr view`, `release list`, `api user`, `api user/orgs`, `secret list`,
+`variable list`).
+
+`read:packages` blocks exactly one call, `gh api user/packages/...`. The package is public,
+so `scripts/ghcr_tags.py` answers the same questions with the registry's anonymous pull
+token — `--sha-only` for the immutable pins, `--digest <tag>` to resolve a tag. Verified:
+it lists 60 tags and resolves `latest` to `sha256:652821ec…`, the deployed image.
+
+Both scopes can be added with `gh auth refresh -h github.com -s read:org,read:packages`
+if you want `gh api` to work verbatim; it needs a browser and buys nothing this runbook
+needs.
+
+### Other
+
+- **`pyproject.toml` version is not bumped** — the runtime version comes from the install
+  stamp, and a hand-edited version makes `hermes doctor` disagree with the image.
 - **Postgres is left running but unused** (zero tables, no code reads `DATABASE_URL`). It
   is hardened and loopback-only, so it is harmless; removing it is a separate decision.
 - **`pyproject.toml` version is not bumped** — the runtime version comes from the install
