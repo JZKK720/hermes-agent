@@ -160,8 +160,13 @@ services:
       start_period: 60s
 
   postgres:
-    image: postgres:16-alpine
+    image: postgres@sha256:f377d590e5474681d4d7838635031a2b50647923b7abfa803ce9b5ff35d5c663
     container_name: hermes-postgres
+    # `missing`, not `always`: a digest-pinned image is already reproducible, and
+    # `--pull always` made every stack refresh depend on reaching Docker Hub. On a
+    # network where registry-1.docker.io does not resolve, that failed the whole
+    # `docker compose up` even though the exact image was already present.
+    pull_policy: missing
     restart: unless-stopped
     environment:
       POSTGRES_DB: hermes
