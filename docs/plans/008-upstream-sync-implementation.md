@@ -1,8 +1,7 @@
 # Hermes Fork Upstream Sync — Implementation Plan
 
-Status: **Tasks 1-7 complete** (merged, lint-clean, tests green, branch pushed, CI image build
-dispatched). Tasks 8-10 (PR → merge → re-pin → redeploy) publish and deploy the verified
-branch.
+Status: **complete** — merged to `main`, image rebuilt from `main`, digest pinned, stack
+redeployed and verified end-to-end.
 
 > **Result so far.** Branch `sync/upstream-20261116` at `eb4e59873b`: upstream merged
 > (`behind: 0`), `fork-only patches 89 '+' / 0 '-'`, merge conflict-free,
@@ -955,9 +954,51 @@ session started from; rollback tag `fork-tip-pre-sync-20261116` = `ce476f23b1`):
 
 This digest was pulled and inspected locally: its `org.opencontainers.image.revision` label
 and its `install-stamp.json` both name `b0f032421c…`, so the artifact corresponds exactly to
-the verified branch tip. **Do not deploy this digest to `main`** — it was built from the
-unmerged branch. Merge first, rebuild from `main` (Task 9), and pin *that* digest; the branch
-digest is only for proving the Dockerfile builds.
+the verified branch tip. **It is not the deployed image** — it was built from the unmerged
+branch.
+
+### Deployed pin (Tasks 8-10 executed)
+
+PR #11 squash-merged to `main` as `9a570933a4`; `git diff 100cb2a0c0 main` is **empty**, so
+the squash preserved the reviewed content exactly.
+
+| | |
+|---|---|
+| PR | `#11` (MERGED) |
+| `main` | `9a570933a4054d4d0f4cc4c1df7f0b20d4867fc9` |
+| workflow run (from `main`) | `44012673921` (success) |
+| digest | `sha256:652821ec93e00b28ce713b7f52ee1c51a0cba9d47285741fc85ee8c9f4903ce4` |
+| image stamp | `0.23.1+6529.g9a57093`, `dirty: false`, `revision` == `main` ✅ |
+| `.env` | `HERMES_FORK_IMAGE` repinned to that digest; all three lanes resolve it |
+
+**Two consequences of squash-merging, both verified harmless here:**
+
+1. **History is flattened.** `git rev-list HEAD..upstream/main` reads **1,727** again, and
+   `merge-base --is-ancestor upstream/main main` exits `1`. The *content* is present (all
+   fork symbols + new upstream modules verified), and `merge-tree` is still conflict-free —
+   but the next sync re-walks those 1,727 commits instead of fast-forwarding. For this fork
+   that is acceptable; a merge commit would have avoided it.
+2. **`baseVersion` is `0.23.1`, not `0.23.2`.** `scripts/releases/distance.py` uses
+   `git tag --merged HEAD`, and the squash dropped `v0.23.2` out of ancestry. This is **not
+   a regression**: the previously deployed image reported `0.23.1` too, because the fork
+   publishes no release tags at all. And **zero** catalog entries require `>=0.23.2`
+   (95 require `>=0.23.1`), so no `requires_hermes` gate changes behaviour.
+
+### Post-deploy smoke (all passed)
+
+| Probe | Result |
+|---|---|
+| `docker compose ps` | 3/3 healthy; gateway `FailingStreak 0` |
+| running image | `sha256:652821ec…` == pinned digest |
+| container `Config.Cmd` | `["gateway","run"]` / `["dashboard",…]` — direct argv, no `sh -lc` |
+| `9119/api/status` | `200`, `overall: ok`, all 3 platforms `connected` |
+| `8642/health` | `200` |
+| `8642/v1/chat/completions` | a real completion — `"SYNC OK"` |
+| `docker port hermes-postgres` | `127.0.0.1:5433` |
+| `hermes --version` | `v0.23.1+6529.g9a57093` — real stamp |
+| `port: 8789` drift grep | `clean` |
+| `/opt/data` owner | `10000:10000` (unchanged) |
+| state | `state.db` 5,369,856 B; 16 sessions, 36 skills, 1 memory; postgres `select 1` → 1 |
 
 The `health` ratchet cannot pass on its baseline: pristine `upstream/main` reports the same
 2 blocking findings (`tests/agent/test_redact.py` FILE_LINES, `tools/approval_home_fold.py`
