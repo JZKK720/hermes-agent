@@ -11,6 +11,17 @@ uv.lock text eol=lf
 Dockerfile  text eol=lf
 *.dockerfile text eol=lf
 docker/entrypoint.sh text eol=lf
+# Extension-less executables under scripts/ (run-in-hermes-env, check,
+# hermes-gateway, hermes-python). These carry a `#!/usr/bin/env bash` shebang
+# and are `exec`'d directly, so a CRLF checkout fails identically to a *.sh one
+# ("/usr/bin/env: 'bash\r': No such file or directory") — but the `*.sh` rule
+# above never matched them, since they have no extension. `core.autocrlf=true`
+# therefore rewrote them on checkout, breaking `scripts/check` (the blocking
+# lint gate) and `scripts/run_tests.sh` on Windows.
+scripts/run-in-hermes-env text eol=lf
+scripts/check            text eol=lf
+scripts/hermes-gateway   text eol=lf
+scripts/hermes-python    text eol=lf
 
 # Every file git detects as text is stored with LF; the rules below also pin the checkout.
 * text=auto
