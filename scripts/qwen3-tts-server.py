@@ -98,7 +98,9 @@ def tts():
         pass  # use text directly
     elif text_file:
         try:
-            text = Path(text_file).read_text(encoding="utf-8").strip()
+            # utf-8-sig tolerates a BOM; Windows editors and PowerShell
+            # Set-Content/Out-File add one, and plain utf-8 then fails to decode.
+            text = Path(text_file).read_text(encoding="utf-8-sig").strip()
         except (OSError, FileNotFoundError):
             return jsonify({"error": f"Cannot read text_file: {text_file}"}), 400
     else:
