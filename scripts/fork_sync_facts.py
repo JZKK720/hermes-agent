@@ -26,14 +26,28 @@ import sys
 
 
 def git(*args: str) -> str:
+    # encoding is explicit: text=True alone decodes with the locale codepage
+    # (cp936 here), which crashes on any non-representable byte in git output.
     return subprocess.run(
-        ("git", *args), capture_output=True, text=True, check=True
+        ("git", *args),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=True,
     ).stdout.strip()
 
 
 def try_git(*args: str) -> str:
     """Like git() but returns "" instead of raising (for optional probes)."""
-    result = subprocess.run(("git", *args), capture_output=True, text=True, check=False)
+    result = subprocess.run(
+        ("git", *args),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
     return result.stdout.strip() if result.returncode == 0 else ""
 
 

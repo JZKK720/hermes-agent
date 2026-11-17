@@ -73,7 +73,7 @@ def get_model():
         tokenizer = Qwen3TTSTokenizer.from_pretrained(_model_name)
         _model = Qwen3TTSModel.from_pretrained(_model_name, device_map=_device)
         _model.tokenizer = tokenizer
-        print(f"[qwen3-tts-server] Model loaded.", flush=True)
+        print("[qwen3-tts-server] Model loaded.", flush=True)
     return _model
 
 

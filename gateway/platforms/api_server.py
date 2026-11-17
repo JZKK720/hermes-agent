@@ -3458,8 +3458,14 @@ class APIServerAdapter(OpenAICompatRoutesMixin, BasePlatformAdapter):
                 status=500,
             )
 
-        with open(file_path, "rb") as file_handle:
-            audio_bytes = file_handle.read()
+        def _read_audio_bytes() -> bytes:
+            with open(file_path, "rb") as file_handle:
+                return file_handle.read()
+
+        # The TTS backend writes a file, so the read is disk IO. Run it off the
+        # event loop: this handler is async, and a blocking read here stalls
+        # every other adapter, timer and health probe on the loop (ASYNC230).
+        audio_bytes = await asyncio.to_thread(_read_audio_bytes)
 
         ext = os.path.splitext(file_path)[1].lower()
         content_types = {

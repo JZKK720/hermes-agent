@@ -34,7 +34,7 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +65,7 @@ class WeixinQRSession:
     qr_image_base64: str = ""  # PNG base64 for <img src="data:image/png;base64,..."> rendering.
     error_message: str = ""
     # Populated on confirmed.
-    credentials: Optional[Dict[str, str]] = None
+    credentials: Optional[dict[str, str]] = None
     # Internal — the background task handle.
     _task: Optional[asyncio.Task] = None
     _qrcode_value: str = ""  # Hex token used for status polling.
@@ -79,9 +79,9 @@ class WeixinQRSession:
             "%Y-%m-%dT%H:%M:%SZ", time.gmtime(self.expires_at_ts)
         )
 
-    def to_status_dict(self) -> Dict[str, Any]:
+    def to_status_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable status snapshot for the polling endpoint."""
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "session_id": self.session_id,
             "state": self.state,
             "expires_at": self.expires_at_iso,
@@ -106,7 +106,7 @@ class WeixinQRSessionManager:
     """
 
     def __init__(self) -> None:
-        self._sessions: Dict[str, WeixinQRSession] = {}
+        self._sessions: dict[str, WeixinQRSession] = {}
         self._lock = threading.RLock()
         self._loop: Optional[asyncio.AbstractEventLoop] = None
 
@@ -154,7 +154,7 @@ class WeixinQRSessionManager:
         profile: str = "",
         bot_type: str = "3",
         timeout_seconds: int = DEFAULT_SESSION_TIMEOUT_SECONDS,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Start a new QR login session.
 
         Returns the initial status dict (state="starting"). The caller
@@ -187,7 +187,7 @@ class WeixinQRSessionManager:
 
         return session.to_status_dict()
 
-    def get_status(self, session_id: str) -> Optional[Dict[str, Any]]:
+    def get_status(self, session_id: str) -> Optional[dict[str, Any]]:
         """Return the current status of a session, or None if not found."""
         with self._lock:
             self._prune_expired()
@@ -211,7 +211,7 @@ class WeixinQRSessionManager:
                 pass
         return True
 
-    def get_credentials(self, session_id: str) -> Optional[Dict[str, str]]:
+    def get_credentials(self, session_id: str) -> Optional[dict[str, str]]:
         """Return confirmed credentials for a session, or None.
 
         Used by the apply endpoint to retrieve the token before saving
@@ -287,7 +287,7 @@ class WeixinQRSessionManager:
                             endpoint=f"{EP_GET_QR_STATUS}?qrcode={session._qrcode_value}",
                             timeout_ms=QR_TIMEOUT_MS,
                         )
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         continue
                     except Exception as exc:
                         logger.warning("weixin QR session %s: poll error: %s", session.session_id, exc)
@@ -395,7 +395,7 @@ class WeixinQRSessionManager:
         return True
 
     async def _handle_confirmed(
-        self, session: WeixinQRSession, status_resp: Dict[str, Any]
+        self, session: WeixinQRSession, status_resp: dict[str, Any]
     ) -> None:
         """Extract credentials from confirmed status and save to disk."""
         try:
