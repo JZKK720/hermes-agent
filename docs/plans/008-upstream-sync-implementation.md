@@ -4,12 +4,12 @@ Status: **Tasks 1-5 and 11 complete** (merged, lint-clean, tests green, running 
 Tasks 6-10 (push → CI image → PR → re-pin → redeploy) remain: they publish and deploy the
 already-verified branch.
 
-> **Result so far.** Branch `sync/upstream-20261116` at `c865b8ac4c`: upstream merged
+> **Result so far.** Branch `sync/upstream-20261116` at `eb4e59873b`: upstream merged
 > (`behind: 0`), `fork-only patches 89 '+' / 0 '-'`, merge conflict-free,
 > `tests/gateway/test_api_server.py` **120 passed / 0 failed** (identical to the recorded
 > baseline), and `scripts/check` reduced to **2 blocking / 2 advisory — byte-for-byte the
 > same findings pristine `upstream/main` reports**. The running stack is on the merged tree
-> and green. Nine commits, listed in §Progress.
+> and green. Eleven commits, listed in §Progress.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -916,8 +916,8 @@ git push
 
 ## Progress (executed 2026-11-17)
 
-Branch `sync/upstream-20261116`, nine commits on top of `fork-tip-pre-sync-20261116`
-(`ce476f23b1`):
+Branch `sync/upstream-20261116`, eleven commits on top of `0b9ad27959` (the fork tip this
+session started from; rollback tag `fork-tip-pre-sync-20261116` = `ce476f23b1`):
 
 | Commit | What it fixes |
 |---|---|
@@ -931,6 +931,7 @@ Branch `sync/upstream-20261116`, nine commits on top of `fork-tip-pre-sync-20261
 | `54ce43db01` | pin `.gitattributes` itself to LF (the `shims` gate) |
 | `808668a2bc` | `fork_sync_facts.py`: HX006 timeouts + correct base/fork-side diff |
 | `c865b8ac4c` | keep the ASYNC230 offload line-neutral for the FILE_LINES ratchet |
+| `eb4e59873b` | record the executed results and host blockers in this plan |
 
 ### Gate results
 
