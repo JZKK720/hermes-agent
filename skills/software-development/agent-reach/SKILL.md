@@ -49,7 +49,7 @@ Use Hermes's `terminal` tool for these:
 gh search repos "query" --sort stars --limit 10
 
 # YouTube subtitles
-yt-dlp --write-sub --skip-download -o "/tmp/%(id)s" "URL"
+yt-dlp --write-sub --skip-download -o "$TMPDIR/%(id)s" "URL"
 
 # V2EX hot topics
 curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: agent-reach/1.0"
@@ -107,7 +107,7 @@ When the user mentions a specific platform:
 | Reddit      | `opencli reddit search "query" -f yaml`                     |
 | XiaoHongShu | `opencli xiaohongshu search "query" -f yaml`                |
 | Bilibili    | `bili search "query" --type video -n 5`                     |
-| YouTube     | `yt-dlp --write-sub --skip-download -o "/tmp/%(id)s" "URL"` |
+| YouTube     | `yt-dlp --write-sub --skip-download -o "$TMPDIR/%(id)s" "URL"` |
 | LinkedIn    | `opencli linkedin search "query" -f yaml`                   |
 | GitHub      | `gh search repos "query" --sort stars --limit 10`           |
 | V2EX        | `curl -s "https://www.v2ex.com/api/topics/hot.json"`        |
@@ -127,7 +127,7 @@ delegate_task tasks: [
 
 ## Workspace Rules
 
-**Never create files in the agent workspace.** Use `/tmp/` for temporary output and `~/.agent-reach/` for persistent data.
+**Never create files in the agent workspace.** Use the scratch directory (`$TMPDIR`, which Hermes points at `hermes_constants.get_scratch_dir()`) for temporary output and `~/.agent-reach/` for persistent data. `no-tmp: ok — prose stating the scratch-dir policy, not a command`
 
 ## Hermes Integration
 
