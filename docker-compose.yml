@@ -54,24 +54,17 @@ x-hermes-common: &hermes-common
     - ./docker/hermes-config.yaml:/opt/hermes/cli-config.yaml.example:ro
     # Use the upstream image's baked-in entrypoint. Overlaying docker/entrypoint.sh
     # from the fork can pin startup behavior and has caused drift on Windows checkouts.
-  environment:
-    # UID remapping — must match your host user to avoid permission issues
-    - HERMES_UID=1000
-    - HERMES_GID=1000
-    # /opt/data is the image default (Dockerfile:396). /workspace MUST be
-    # added or agent/file_safety.py denies every write under it — the mount
-    # would look correct and fail silently with an "outside
-    # HERMES_WRITE_SAFE_ROOT" error. os.pathsep-separated list of prefixes.
-    - HERMES_WRITE_SAFE_ROOT=/opt/data:/workspace
-    # Ollama does not require a real API key; any non-empty string satisfies the field
-    - OPENAI_API_KEY=ollama
-    # Ollama lives on the Docker host. host.docker.internal resolves via the
-    # extra_hosts entry below — works on Docker Desktop (Win/macOS) and on
-    # Linux with the host-gateway mapping.
-    - OPENAI_BASE_URL=http://host.docker.internal:11434/v1
-    - OLLAMA_BASE_URL=http://host.docker.internal:11434
-    # Postgres DSN — available to memory plugins and skills
-    - DATABASE_URL=postgresql://hermes:${POSTGRES_PASSWORD:-changeme}@postgres:5432/hermes
+  # NOTE: no `environment:` block here on purpose. A YAML merge key REPLACES a
+  # sequence rather than deep-merging it, and both services declare their own
+  # `environment:`, so anything listed here would never reach a container. The
+  # vars this anchor used to carry are all absent from the running containers,
+  # and that is the correct outcome:
+  #   HERMES_UID/GID     — the image creates `hermes` at UID 10000 and /opt/data
+  #                        is owned 10000:10000. Setting 1000 would usermod the
+  #                        runtime user away from its own volume (stage2-hook.sh).
+  #   OPENAI_*/OLLAMA_*  — data/config.yaml `model.base_url` is authoritative and wins.
+  #   DATABASE_URL       — nothing in the image reads it (see the postgres service).
+  # HERMES_WRITE_SAFE_ROOT is set on each service, where it actually takes effect.
   env_file:
     # User secrets — copy docker/hermes-env.example → data/.env and fill in
     - path: ./data/.env
@@ -177,7 +170,12 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5433:5432"
+      # Loopback-only on the host. Nothing in this stack consumes this port
+      # (no Hermes code reads DATABASE_URL), so publishing it on 0.0.0.0 only
+      # widened the attack surface: a LAN client could reach a Postgres whose
+      # password defaulted to "changeme". Reach it with `docker compose exec
+      # postgres psql -U hermes` instead.
+      - "127.0.0.1:5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U hermes -d hermes"]
       interval: 5s
